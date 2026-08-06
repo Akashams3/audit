@@ -1,0 +1,118 @@
+
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+}
+
+.container {
+  display: flex;
+  height: 100vh;
+}
+
+/* Left side */
+.left {
+  flex: 1;
+  background: linear-gradient(to right, #2563eb, #1e3a8a);
+  color: white;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.left h1 {
+  font-size: 36px;
+  margin-bottom: 10px;
+}
+
+/* Right side */
+.right {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #f5f5f5;
+}
+
+.form-box {
+  background: white;
+  padding: 30px;
+  width: 300px;
+  border-radius: 10px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+}
+
+.form-box h2 {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.input {
+  width: 100%;
+  padding: 10px;
+  margin: 10px 0;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+.input:focus {
+  outline: none;
+  border-color: #2563eb;
+}
+
+.button {
+  width: 100%;
+  padding: 10px;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.button:hover {
+  background: #1e40af;
+}
+.role-toggle {
+  position: relative;
+  display: flex;
+  background: #e5e7eb;
+  border-radius: 8px;
+  padding: 4px;
+  margin-bottom: 15px;
+  overflow: hidden;
+}
+
+/* Sliding background */
+.role-toggle .slider {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: calc(33.33% - 8px);
+  height: calc(100% - 8px);
+  background: #2563eb;
+  border-radius: 6px;
+  transition: 0.3s ease;
+  z-index: 0;
+}
+
+/* Buttons */
+.role-toggle button {
+  flex: 1;
+  padding: 8px;
+  font-size: 13px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 6px;
+  position: relative;
+  z-index: 1;
+  color: #374151;
+  transition: 0.3s;
+}
+
+/* Active text */
+.role-toggle button.active {
+  color: white;
+}
