@@ -1,7 +1,7 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import FacultyDashboard from './FacultyDashboard';
-import IqacDashboard from './IqacDashboard';
+import CoordinatorDashboard from './CoordinatorDashboard';
 import DirectorDashboard from './DirectorDashboard';
 import { Navigate } from 'react-router-dom';
 
@@ -12,21 +12,23 @@ const DashboardHome = () => {
     return <Navigate to="/login" replace />;
   }
 
-  switch (user.role) {
-    case 'ROLE_FACULTY':
-      return <FacultyDashboard />;
-    case 'ROLE_INVIGILATOR':
-    case 'ROLE_HOD':
-      return <IqacDashboard />;
-    case 'ROLE_DIRECTOR':
-      return <DirectorDashboard />;
-    default:
-      return (
-        <div className="p-8 text-center text-rose-500 font-bold">
-          Unknown User Role: {user.role}
-        </div>
-      );
+  const userRole = (user?.role || (Array.isArray(user?.roles) ? user.roles[0] : '') || '').toUpperCase();
+
+  if (userRole.includes('DIRECTOR')) {
+    return <DirectorDashboard />;
   }
+  if (userRole.includes('FACULTY')) {
+    return <FacultyDashboard />;
+  }
+  if (userRole.includes('INVIGILATOR') || userRole.includes('HOD') || userRole.includes('COORDINATOR')) {
+    return <CoordinatorDashboard />;
+  }
+
+  return (
+    <div className="p-8 text-center text-rose-500 font-bold">
+      Unknown User Role: {userRole || JSON.stringify(user)}
+    </div>
+  );
 };
 
 export default DashboardHome;

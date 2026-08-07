@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { UploadCloud, Download, Trash2, HelpCircle, CheckCircle, AlertCircle, FileText, Clock } from 'lucide-react';
+import { UploadCloud, Download, Trash2, HelpCircle, CheckCircle, AlertCircle, FileText, Clock, History } from 'lucide-react';
 import { getDisplayFileName } from '../utils/formatUtils';
+import { isFppDocument } from '../utils/fppUtils';
+import FileVersionModal from '../components/FileVersionModal';
 
 const AcademicFileUpload = () => {
   const { authFetch, API_BASE_URL } = useAuth();
   const [courseName, setCourseName] = useState('');
   const [documentType, setDocumentType] = useState('');
+  const [studentYear, setStudentYear] = useState('1st Year');
   const [file, setFile] = useState(null);
   const [dragActive, setDragActive] = useState(false);
   const [submissionType, setSubmissionType] = useState('file');
@@ -21,6 +24,8 @@ const AcademicFileUpload = () => {
 
   const [uploadStatus, setUploadStatus] = useState({ blocked: false, requestStatus: 'NONE' });
   const [lateReason, setLateReason] = useState('');
+  
+  const [versionModalState, setVersionModalState] = useState({ isOpen: false, fileId: null, fileName: '' });
 
   const fetchUploadStatus = async () => {
     try {
@@ -47,10 +52,10 @@ const AcademicFileUpload = () => {
 
   const fetchRequiredFiles = async () => {
     try {
-      const res = await authFetch('http://localhost:8080/api/faculty/required-files');
+      const res = await authFetch(`http://localhost:8080/api/faculty/required-files?year=${encodeURIComponent(studentYear)}`);
       if (res.ok) {
         const data = await res.json();
-        setRequiredFiles(data.filter(r => r.fileCategory === 'ACADEMIC' || r.fileCategory === 'COURSE'));
+        setRequiredFiles(data.filter(r => (r.fileCategory === 'ACADEMIC' || r.fileCategory === 'COURSE') && isFppDocument(r)));
       }
     } catch (e) {
       console.error(e);
@@ -70,10 +75,13 @@ const AcademicFileUpload = () => {
 
   useEffect(() => {
     fetchMyFiles();
-    fetchRequiredFiles();
     fetchCalendar();
     fetchUploadStatus();
   }, []);
+
+  useEffect(() => {
+    fetchRequiredFiles();
+  }, [studentYear]);
 
   const handleDrag = (e) => {
     e.preventDefault();
@@ -162,6 +170,7 @@ const AcademicFileUpload = () => {
       setProgress(80);
       if (res.ok) {
         setMsg({ text: submissionType === 'file' ? 'File uploaded successfully!' : 'Document text submitted and converted to PDF!', type: 'success' });
+        setTimeout(() => setMsg({ text: '', type: '' }), 3500);
         setFile(null);
         setTextContent('');
         setCourseName('');
@@ -170,9 +179,11 @@ const AcademicFileUpload = () => {
       } else {
         const errData = await res.json();
         setMsg({ text: errData.message || 'Upload failed.', type: 'error' });
+        setTimeout(() => setMsg({ text: '', type: '' }), 4000);
       }
     } catch (e) {
       setMsg({ text: 'Error uploading file: ' + e.message, type: 'error' });
+      setTimeout(() => setMsg({ text: '', type: '' }), 4000);
     } finally {
       setProgress(100);
       setTimeout(() => {
@@ -185,7 +196,8 @@ const AcademicFileUpload = () => {
   const handleRequestLatePermission = async (e) => {
     e.preventDefault();
     if (!lateReason.trim()) {
-      alert('Please state a reason for late submission.');
+      setMsg({ text: 'Please state a reason for late submission.', type: 'error' });
+      setTimeout(() => setMsg({ text: '', type: '' }), 3500);
       return;
     }
     try {
@@ -195,14 +207,17 @@ const AcademicFileUpload = () => {
         body: JSON.stringify({ scheduleId: uploadStatus.scheduleId, reason: lateReason })
       });
       if (res.ok) {
-        alert('Permission request submitted successfully.');
+        setMsg({ text: 'Permission request submitted successfully.', type: 'success' });
+        setTimeout(() => setMsg({ text: '', type: '' }), 3500);
         setLateReason('');
         fetchUploadStatus();
       } else {
-        alert('Failed to submit request.');
+        setMsg({ text: 'Failed to submit request.', type: 'error' });
+        setTimeout(() => setMsg({ text: '', type: '' }), 3500);
       }
     } catch (e) {
-      alert('Error: ' + e.message);
+      setMsg({ text: 'Error: ' + e.message, type: 'error' });
+      setTimeout(() => setMsg({ text: '', type: '' }), 3500);
     }
   };
 
@@ -303,16 +318,33 @@ const AcademicFileUpload = () => {
                 )}
 
                 <form onSubmit={handleUpload} className="space-y-5">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Course / Subject Name</label>
-                    <input
-                      type="text"
-                      required
-                      value={courseName}
-                      onChange={(e) => setCourseName(e.target.value)}
-                      placeholder="e.g. Data Structures"
-                      className="mt-1.5 block w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 focus:bg-white focus:border-[#0A3D91] outline-none transition-all font-semibold"
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Student Year Level</label>
+                      <select
+                        value={studentYear}
+                        onChange={(e) => setStudentYear(e.target.value)}
+                        className="mt-1.5 block w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 focus:bg-white focus:border-[#0A3D91] outline-none transition-all font-semibold cursor-pointer"
+                      >
+                        <option value="1st Year">1st Year</option>
+                        <option value="2nd Year">2nd Year</option>
+                        <option value="3rd Year">3rd Year</option>
+                        <option value="4th Year">4th Year</option>
+                        <option value="ALL">All Student Years</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Course / Subject Name</label>
+                      <input
+                        type="text"
+                        required
+                        value={courseName}
+                        onChange={(e) => setCourseName(e.target.value)}
+                        placeholder="e.g. Data Structures"
+                        className="mt-1.5 block w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 focus:bg-white focus:border-[#0A3D91] outline-none transition-all font-semibold"
+                      />
+                    </div>
                   </div>
 
                   <div>
@@ -321,12 +353,12 @@ const AcademicFileUpload = () => {
                       required
                       value={documentType}
                       onChange={(e) => setDocumentType(e.target.value)}
-                      className="mt-1.5 block w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 focus:bg-white focus:border-[#0A3D91] outline-none transition-all font-semibold"
+                      className="mt-1.5 block w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 focus:bg-white focus:border-[#0A3D91] outline-none transition-all font-semibold cursor-pointer"
                     >
                       <option value="">Select Document Type</option>
                       {requiredFiles.map((req) => (
                         <option key={req.id} value={req.fileName}>
-                          {getDisplayFileName(req.fileName, academicCalendar)} {req.mandatory ? ' (Required)' : ''}
+                          {getDisplayFileName(req.fileName, academicCalendar)}
                         </option>
                       ))}
                     </select>
@@ -533,6 +565,14 @@ const AcademicFileUpload = () => {
           </div>
         </div>
       </div>
+
+      <FileVersionModal
+        isOpen={versionModalState.isOpen}
+        onClose={() => setVersionModalState({ isOpen: false, fileId: null, fileName: '' })}
+        fileId={versionModalState.fileId}
+        fileCategory="ACADEMIC"
+        fileName={versionModalState.fileName}
+      />
     </div>
   );
 };

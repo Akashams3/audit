@@ -1,11 +1,12 @@
 export const getDisplayFileName = (fileName, calendarContext) => {
   if (!fileName) return '';
-  const lower = fileName.toLowerCase();
+  let cleanName = fileName.replace(/\s*\(X\)/gi, '').trim();
+  const lower = cleanName.toLowerCase();
   if (
     lower.includes('even/odd') ||
     lower.includes('odd/even') ||
     lower.includes('semester course syllabus') ||
-    fileName === 'Course Syllabus'
+    cleanName === 'Course Syllabus'
   ) {
     const contextStr = typeof calendarContext === 'string'
       ? calendarContext
@@ -19,5 +20,5 @@ export const getDisplayFileName = (fileName, calendarContext) => {
     }
     return 'Course Syllabus';
   }
-  return fileName;
+  return cleanName;
 };

@@ -695,10 +695,10 @@ function ProfileSection({ profile, onUpdate }) {
        await changePassword({ currentPassword: changePasswordForm.oldPassword, newPassword: changePasswordForm.newPassword });
        setShowChangePassword(false);
        setChangePasswordForm({ oldPassword: "", newPassword: "" });
-       alert("Password changed successfully!");
+       showNotification("Password changed successfully!");
      } catch (err) {
        console.error("Error changing password:", err);
-       alert(err.response?.data?.message || "Failed to change password");
+       showNotification(err.response?.data?.message || "Failed to change password", "error");
      }
    };
 

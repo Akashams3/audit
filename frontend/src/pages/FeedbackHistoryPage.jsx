@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useAcademicYear } from '../context/AcademicYearContext';
 import { MessageSquare, ArrowLeft } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const FeedbackHistoryPage = () => {
   const { authFetch } = useAuth();
+  const { selectedAcademicYear } = useAcademicYear();
   const [feedback, setFeedback] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -12,7 +14,7 @@ const FeedbackHistoryPage = () => {
     const fetchFeedback = async () => {
       try {
         setLoading(true);
-        const res = await authFetch('http://localhost:8080/api/director/feedback');
+        const res = await authFetch(`http://localhost:8080/api/director/feedback?academicYear=${encodeURIComponent(selectedAcademicYear)}`);
         if (res.ok) {
           setFeedback(await res.json());
         }
@@ -23,7 +25,7 @@ const FeedbackHistoryPage = () => {
       }
     };
     fetchFeedback();
-  }, []);
+  }, [selectedAcademicYear]);
 
   return (
     <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm space-y-6">

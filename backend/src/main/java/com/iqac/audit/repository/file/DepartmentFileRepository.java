@@ -13,6 +13,7 @@ public interface DepartmentFileRepository extends JpaRepository<DepartmentFile, 
     List<DepartmentFile> findByDepartment(String department);
     List<DepartmentFile> findByFacultyIdAndDocumentType(Long facultyId, String documentType);
     Optional<DepartmentFile> findByDepartmentAndFacultyIdAndDocumentType(String department, Long facultyId, String documentType);
+    Optional<DepartmentFile> findByDepartmentAndFacultyIdAndDocumentTypeAndFileName(String department, Long facultyId, String documentType, String fileName);
     long countByDepartment(String department);
     long countByDepartmentAndStatus(String department, String status);
 }

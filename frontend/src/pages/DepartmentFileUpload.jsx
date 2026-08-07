@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { UploadCloud, Download, Trash2, CheckCircle, AlertCircle, FileText, Clock } from 'lucide-react';
+import { getDisplayFileName } from '../utils/formatUtils';
 
 const DepartmentFileUpload = () => {
   const { authFetch, API_BASE_URL } = useAuth();
@@ -145,7 +146,8 @@ const DepartmentFileUpload = () => {
 
       setProgress(80);
       if (res.ok) {
-        setMsg({ text: submissionType === 'file' ? 'Department file uploaded successfully!' : 'Department text submitted and converted to PDF!', type: 'success' });
+        setMsg({ text: submissionType === 'file' ? 'Department file uploaded successfully!' : 'Document text submitted and converted to PDF!', type: 'success' });
+        setTimeout(() => setMsg({ text: '', type: '' }), 3500);
         setFile(null);
         setTextContent('');
         setDocumentType('');
@@ -153,9 +155,11 @@ const DepartmentFileUpload = () => {
       } else {
         const errData = await res.json();
         setMsg({ text: errData.message || 'Upload failed.', type: 'error' });
+        setTimeout(() => setMsg({ text: '', type: '' }), 4000);
       }
     } catch (e) {
       setMsg({ text: 'Error uploading file: ' + e.message, type: 'error' });
+      setTimeout(() => setMsg({ text: '', type: '' }), 4000);
     } finally {
       setProgress(100);
       setTimeout(() => {
@@ -168,7 +172,8 @@ const DepartmentFileUpload = () => {
   const handleRequestLatePermission = async (e) => {
     e.preventDefault();
     if (!lateReason.trim()) {
-      alert('Please state a reason for late submission.');
+      setMsg({ text: 'Please state a reason for late submission.', type: 'error' });
+      setTimeout(() => setMsg({ text: '', type: '' }), 3500);
       return;
     }
     try {
@@ -178,14 +183,17 @@ const DepartmentFileUpload = () => {
         body: JSON.stringify({ scheduleId: uploadStatus.scheduleId, reason: lateReason })
       });
       if (res.ok) {
-        alert('Permission request submitted successfully.');
+        setMsg({ text: 'Permission request submitted successfully.', type: 'success' });
+        setTimeout(() => setMsg({ text: '', type: '' }), 3500);
         setLateReason('');
         fetchUploadStatus();
       } else {
-        alert('Failed to submit request.');
+        setMsg({ text: 'Failed to submit request.', type: 'error' });
+        setTimeout(() => setMsg({ text: '', type: '' }), 3500);
       }
     } catch (e) {
-      alert('Error: ' + e.message);
+      setMsg({ text: 'Error: ' + e.message, type: 'error' });
+      setTimeout(() => setMsg({ text: '', type: '' }), 3500);
     }
   };
 
@@ -297,7 +305,7 @@ const DepartmentFileUpload = () => {
                       <option value="">Select Document Type</option>
                       {requiredFiles.map((req) => (
                         <option key={req.id} value={req.fileName}>
-                          {req.fileName} {req.mandatory ? ' (Required)' : ''}
+                          {getDisplayFileName(req.fileName)}
                         </option>
                       ))}
                     </select>

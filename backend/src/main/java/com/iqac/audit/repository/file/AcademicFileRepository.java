@@ -14,6 +14,7 @@ public interface AcademicFileRepository extends JpaRepository<AcademicFile, Long
     List<AcademicFile> findByDepartment(String department);
     List<AcademicFile> findByFacultyIdAndCourseNameAndDocumentType(Long facultyId, String courseName, String documentType);
     Optional<AcademicFile> findByDepartmentAndFacultyIdAndCourseNameAndDocumentType(String department, Long facultyId, String courseName, String documentType);
+    Optional<AcademicFile> findByDepartmentAndFacultyIdAndCourseNameAndDocumentTypeAndFileName(String department, Long facultyId, String courseName, String documentType, String fileName);
     long countByDepartment(String department);
     long countByDepartmentAndStatus(String department, String status);
 }

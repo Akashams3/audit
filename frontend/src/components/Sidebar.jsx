@@ -24,7 +24,8 @@ import {
   Activity,
   Key,
   UserPlus,
-  Clock
+  Clock,
+  Play
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -56,10 +57,13 @@ const Sidebar = () => {
     if (role === 'ROLE_DIRECTOR') {
       return [
         { to: '/', label: 'Dashboard', icon: LayoutDashboard },
+        { to: '/director/audit-stage', label: 'Audit Stage Control', icon: Play },
+        { to: '/director/audit-history', label: 'Audit History', icon: History },
         { to: '/director/progress', label: 'Progress Tracker', icon: Activity },
         { to: '/director/schedule', label: 'Schedule', icon: CalendarDays },
         { to: '/director/required-files', label: 'Required Files', icon: ClipboardList },
         { to: '/director/late-requests', label: 'Late Upload Requests', icon: Clock },
+        { to: '/audit-logs', label: 'System Audit Logs', icon: History },
         { to: '/notifications', label: 'Notifications', icon: Bell, badge: unreadCount > 0 ? unreadCount : null },
         { to: '/feedback', label: 'Feedback & Comments', icon: MessageSquare },
         { to: '/reports', label: 'Reports', icon: FileText },

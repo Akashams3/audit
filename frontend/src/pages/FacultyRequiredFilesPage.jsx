@@ -150,7 +150,6 @@ const FacultyRequiredFilesPage = () => {
                           ? <BookOpen size={13} className="text-blue-500 flex-shrink-0" />
                           : <FolderOpen size={13} className="text-orange-500 flex-shrink-0" />}
                         <span className="font-bold text-slate-800">{getDisplayFileName(f.fileName, academicCalendar)}</span>
-                        {f.isXFile && <span className="bg-rose-100 text-rose-800 text-[9px] font-bold px-1.5 py-0.5 rounded ml-1.5">(X)</span>}
                       </div>
                     </td>
                     <td className="py-3.5 px-2">

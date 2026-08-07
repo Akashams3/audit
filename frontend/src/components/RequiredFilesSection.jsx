@@ -3,6 +3,7 @@ import AcademicYearSemesterFilter from "./AcademicYearSemesterFilter";
 import Modal from "./Modal";
 import { Btn, Input, Select, Table, StatusBadge, Alert, Spinner } from "./UI";
 import * as api from "../api/endpoints";
+import { getDisplayFileName } from "../utils/formatUtils";
 
 export default function RequiredFilesSection() {
   const [stage, setStage] = useState("");
@@ -154,9 +155,8 @@ export default function RequiredFilesSection() {
                 label: "Document Name",
                 render: (val, row) => (
                   <div>
-                    <span style={{ fontWeight: 600, color: "#0f172a" }}>{val}</span>
+                    <span style={{ fontWeight: 600, color: "#0f172a" }}>{getDisplayFileName(val)}</span>
                     {row.mandatory && <span style={{ color: "#ef4444", marginLeft: 4, fontWeight: "bold" }}>*</span>}
-                    {row.isXFile && <span style={{ background: "#fee2e2", color: "#991b1b", fontSize: 11, padding: "2px 6px", borderRadius: 4, marginLeft: 8 }}>Custom (X)</span>}
                   </div>
                 ),
               },

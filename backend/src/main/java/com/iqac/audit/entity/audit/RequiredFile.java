@@ -34,6 +34,9 @@ public class RequiredFile {
     @Column(name = "stage")
     private Set<AuditStage> stages = new HashSet<>();
 
+    @Column(name = "academic_year")
+    private String academicYear = "ALL"; // e.g. "2026–2027", "ALL"
+
     @Column(name = "year_name")
     private String year = "ALL"; // e.g. "1st Year", "2nd Year", "3rd Year", "4th Year", "ALL"
 
@@ -119,6 +122,14 @@ public class RequiredFile {
 
     public void setStages(Set<AuditStage> stages) {
         this.stages = stages;
+    }
+
+    public String getAcademicYear() {
+        return academicYear;
+    }
+
+    public void setAcademicYear(String academicYear) {
+        this.academicYear = academicYear;
     }
 
     public String getYear() {

@@ -1,4 +1,5 @@
-export default function Modal({ title, onClose, children, width = 520 }) {
+export default function Modal({ isOpen = true, title, onClose, children, width = 520 }) {
+  if (!isOpen) return null;
   return (
     <div
       style={{

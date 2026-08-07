@@ -45,7 +45,7 @@ public class FileStorageService {
         Files.createDirectories(targetFolder);
 
         Optional<AcademicFile> existingFileOpt = academicFileRepository
-                .findByDepartmentAndFacultyIdAndCourseNameAndDocumentType(deptCode, faculty.getId(), courseName, documentType);
+                .findByDepartmentAndFacultyIdAndCourseNameAndDocumentTypeAndFileName(deptCode, faculty.getId(), courseName, documentType, originalFileName);
 
         AcademicFile academicFile;
         if (existingFileOpt.isPresent()) {
@@ -56,7 +56,7 @@ public class FileStorageService {
             academicFile = new AcademicFile();
         }
 
-        String storedName = originalFileName;
+        String storedName = System.currentTimeMillis() + "_" + originalFileName;
         Path targetPath = targetFolder.resolve(storedName);
         Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
 
@@ -90,7 +90,7 @@ public class FileStorageService {
         Files.createDirectories(targetFolder);
 
         Optional<DepartmentFile> existingFileOpt = departmentFileRepository
-                .findByDepartmentAndFacultyIdAndDocumentType(deptCode, faculty.getId(), documentType);
+                .findByDepartmentAndFacultyIdAndDocumentTypeAndFileName(deptCode, faculty.getId(), documentType, originalFileName);
 
         DepartmentFile departmentFile;
         if (existingFileOpt.isPresent()) {
@@ -101,7 +101,7 @@ public class FileStorageService {
             departmentFile = new DepartmentFile();
         }
 
-        String storedName = originalFileName;
+        String storedName = System.currentTimeMillis() + "_" + originalFileName;
         Path targetPath = targetFolder.resolve(storedName);
         Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
 

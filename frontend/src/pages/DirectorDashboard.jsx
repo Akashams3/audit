@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useAcademicYear } from '../context/AcademicYearContext';
 import { isFppDocument } from '../utils/fppUtils';
 import {
   Search,
@@ -19,6 +20,7 @@ import {
 
 const DirectorDashboard = () => {
   const { user, authFetch, API_BASE_URL } = useAuth();
+  const { selectedAcademicYear } = useAcademicYear();
   
   const [stats, setStats] = useState(null);
   const [summary, setSummary] = useState([]);
@@ -27,7 +29,7 @@ const DirectorDashboard = () => {
   const [requiredFiles, setRequiredFiles] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Filters for files table
+  // Filters for files
   const [selectedDeptFilter, setSelectedDeptFilter] = useState('All');
   const [selectedTypeFilter, setSelectedTypeFilter] = useState('All');
   const [fileSearchQuery, setFileSearchQuery] = useState('');
@@ -87,26 +89,47 @@ const DirectorDashboard = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const statsRes = await authFetch('http://localhost:8080/api/director/dashboard');
-      const sumRes = await authFetch('http://localhost:8080/api/director/department-summary');
-      const filesRes = await authFetch('http://localhost:8080/api/director/files');
-      const feedbackRes = await authFetch('http://localhost:8080/api/director/feedback');
-      const reqRes = await authFetch('http://localhost:8080/api/director/required-files');
+      const [statsRes, sumRes, filesRes, feedbackRes, reqRes] = await Promise.allSettled([
+        authFetch(`http://localhost:8080/api/director/dashboard?academicYear=${encodeURIComponent(selectedAcademicYear)}`),
+        authFetch(`http://localhost:8080/api/director/department-summary?academicYear=${encodeURIComponent(selectedAcademicYear)}`),
+        authFetch('http://localhost:8080/api/director/files'),
+        authFetch('http://localhost:8080/api/director/feedback'),
+        authFetch('http://localhost:8080/api/director/required-files')
+      ]);
 
-      if (statsRes.ok && sumRes.ok && filesRes.ok && feedbackRes.ok) {
-        const statsData = await statsRes.json();
-        setStats(statsData);
-        setSummary(await sumRes.json());
-        const filesData = await filesRes.json();
-        setFiles(filesData);
-        setFeedbackHistory(await feedbackRes.json());
-        if (filesData.length > 0 && !selectedFileForFeedback) {
-          setSelectedFileForFeedback(filesData[0]);
-        }
+      if (statsRes.status === 'fulfilled' && statsRes.value.ok) {
+        try { setStats(await statsRes.value.json()); } catch (e) {}
       }
-      if (reqRes.ok) setRequiredFiles(await reqRes.json());
+      if (sumRes.status === 'fulfilled' && sumRes.value.ok) {
+        try {
+          const sumData = await sumRes.value.json();
+          setSummary(Array.isArray(sumData) ? sumData : []);
+        } catch (e) {}
+      }
+      if (filesRes.status === 'fulfilled' && filesRes.value.ok) {
+        try {
+          const filesData = await filesRes.value.json();
+          const validFiles = Array.isArray(filesData) ? filesData : [];
+          setFiles(validFiles);
+          if (validFiles.length > 0 && !selectedFileForFeedback) {
+            setSelectedFileForFeedback(validFiles[0]);
+          }
+        } catch (e) {}
+      }
+      if (feedbackRes.status === 'fulfilled' && feedbackRes.value.ok) {
+        try {
+          const fbData = await feedbackRes.value.json();
+          setFeedbackHistory(Array.isArray(fbData) ? fbData : []);
+        } catch (e) {}
+      }
+      if (reqRes.status === 'fulfilled' && reqRes.value.ok) {
+        try {
+          const reqData = await reqRes.value.json();
+          setRequiredFiles(Array.isArray(reqData) ? reqData : []);
+        } catch (e) {}
+      }
     } catch (e) {
-      console.error(e);
+      console.error("Error fetching director dashboard data:", e);
     } finally {
       setLoading(false);
     }
@@ -116,29 +139,40 @@ const DirectorDashboard = () => {
     if (user) {
       fetchData();
     }
-  }, [user]);
+  }, [user, selectedAcademicYear]);
 
-  const fppCount = files.filter(isFppDocument).length;
+  const safeFiles = Array.isArray(files) ? files : [];
+  const safeSummary = Array.isArray(summary) ? summary : [];
+  const safeFeedbackHistory = Array.isArray(feedbackHistory) ? feedbackHistory : [];
+
+  const fppCount = safeFiles.filter(isFppDocument).length;
 
   // Filter files in main grid
-  const filteredFiles = files.filter(f => {
+  const filteredFiles = safeFiles.filter(f => {
+    if (!f) return false;
     const deptMatch = selectedDeptFilter === 'All' || f.department === selectedDeptFilter;
     const typeMatch = selectedTypeFilter === 'All'
       ? true
       : selectedTypeFilter === 'fpp'
       ? isFppDocument(f)
       : f.fileType === selectedTypeFilter;
-    const searchMatch = f.fileName.toLowerCase().includes(fileSearchQuery.toLowerCase()) || 
-                         f.courseName.toLowerCase().includes(fileSearchQuery.toLowerCase()) ||
-                         f.uploadedBy.toLowerCase().includes(fileSearchQuery.toLowerCase());
+    
+    const query = (fileSearchQuery || '').toLowerCase();
+    const fileName = (f.fileName || '').toLowerCase();
+    const courseName = (f.courseName || '').toLowerCase();
+    const uploadedBy = (f.uploadedBy || '').toLowerCase();
+    const searchMatch = !query || fileName.includes(query) || courseName.includes(query) || uploadedBy.includes(query);
     return deptMatch && typeMatch && searchMatch;
   });
 
   // Filter files in feedback search scroll list
-  const filteredFilesForFeedbackSelection = files.filter(f => 
-    f.fileName.toLowerCase().includes(feedbackFileSearch.toLowerCase()) ||
-    f.department.toLowerCase().includes(feedbackFileSearch.toLowerCase())
-  );
+  const filteredFilesForFeedbackSelection = safeFiles.filter(f => {
+    if (!f) return false;
+    const query = (feedbackFileSearch || '').toLowerCase();
+    const fileName = (f.fileName || '').toLowerCase();
+    const department = (f.department || '').toLowerCase();
+    return !query || fileName.includes(query) || department.includes(query);
+  });
 
   const handleSendFeedback = async (e) => {
     e.preventDefault();
@@ -189,22 +223,16 @@ const DirectorDashboard = () => {
     fetchData();
   };
 
-  // Static mock department summary to replicate Image 1
-  const mockDeptRows = [
-    { name: "Computer Science and Engineering", courses: "1 / 4", depts: "0 / 1", progress: 25, date: "25 Jun 2025", dateColor: "text-rose-600 font-bold" },
-    { name: "Information Technology", courses: "0 / 4", depts: "0 / 1", progress: 0, date: "25 Jun 2025", dateColor: "text-slate-400 font-semibold" },
-    { name: "Electronics and Communication", courses: "1 / 4", depts: "0 / 1", progress: 25, date: "26 Jun 2025", dateColor: "text-rose-600 font-bold" },
-    { name: "Mechanical Engineering", courses: "0 / 4", depts: "0 / 1", progress: 0, date: "26 Jun 2025", dateColor: "text-slate-400 font-semibold" },
-    { name: "Civil Engineering", courses: "0 / 4", depts: "0 / 1", progress: 0, date: "26 Jun 2025", dateColor: "text-slate-400 font-semibold" },
-  ];
-
   return (
     <div className="space-y-6 font-sans">
       {/* Title Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-2 md:space-y-0">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white border border-slate-100 rounded-2xl p-4 shadow-sm">
         <div>
-          <h2 className="text-xl font-bold text-slate-800">IQAC - Director</h2>
-          <p className="text-slate-400 text-xs font-semibold mt-0.5">Dashboard Overview</p>
+          <h2 className="text-xl font-bold text-slate-800">IQAC - Director Dashboard</h2>
+          <p className="text-slate-400 text-xs font-semibold mt-0.5">Institution-wide Audit Control & Monitoring Workspace</p>
+        </div>
+        <div className="flex items-center space-x-2 bg-blue-50 border border-blue-100 px-3 py-1.5 rounded-xl">
+          <span className="text-xs font-bold text-blue-800">Active Academic Year: {selectedAcademicYear}</span>
         </div>
       </div>
 
@@ -243,7 +271,7 @@ const DirectorDashboard = () => {
                 <p className="text-[10px] text-slate-500 font-bold mt-0.5">Submitted / Total</p>
               </div>
               <div className="w-full bg-slate-200/50 rounded-full h-1 mt-1">
-                <div className="bg-emerald-500 h-1 rounded-full animate-all" style={{ width: `${stats?.courseTotal > 0 ? Math.round((stats.courseSubmitted / stats.courseTotal) * 100) : 0}%` }}></div>
+                <div className="bg-emerald-500 h-1 rounded-full animate-all" style={{ width: `${(stats?.courseTotal > 0 && (stats?.academicSubmitted || stats?.courseSubmitted)) ? Math.round(((stats.academicSubmitted || stats.courseSubmitted) / stats.courseTotal) * 100) : 0}%` }}></div>
               </div>
             </div>
 
@@ -262,7 +290,7 @@ const DirectorDashboard = () => {
                 <p className="text-[10px] text-slate-500 font-bold mt-0.5">Submitted / Total</p>
               </div>
               <div className="w-full bg-slate-200/50 rounded-full h-1 mt-1">
-                <div className="bg-orange-500 h-1 rounded-full animate-all" style={{ width: `${stats?.deptTotal > 0 ? Math.round((stats.deptSubmitted / stats.deptTotal) * 100) : 0}%` }}></div>
+                <div className="bg-orange-500 h-1 rounded-full animate-all" style={{ width: `${(stats?.deptTotal > 0 && stats?.deptSubmitted) ? Math.round((stats.deptSubmitted / stats.deptTotal) * 100) : 0}%` }}></div>
               </div>
             </div>
 
@@ -303,7 +331,8 @@ const DirectorDashboard = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {summary.filter(s => {
+                  {safeSummary.filter(s => {
+                    if (!s) return false;
                     const currentYear = new Date().getFullYear();
                     const storageKey = `completed_depts_frontend_${currentYear}`;
                     const completedDepts = JSON.parse(localStorage.getItem(storageKey) || '[]');
@@ -443,7 +472,7 @@ const DirectorDashboard = () => {
                         </span>
                       </td>
                       <td className="py-3.5 px-2 text-slate-600">{f.uploadedBy}</td>
-                      <td className="py-3.5 px-2 text-slate-400">{new Date(f.uploadedDate).toLocaleDateString()}</td>
+                      <td className="py-3.5 px-2 text-slate-400">{f.uploadedDate ? new Date(f.uploadedDate).toLocaleDateString() : '—'}</td>
                       <td className="py-3.5 px-2">
                         <span className="px-2.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-700 uppercase tracking-wide">
                           Submitted
@@ -452,17 +481,27 @@ const DirectorDashboard = () => {
                       <td className="py-3.5 px-2 text-right">
                         <div className="flex items-center justify-end space-x-2 text-slate-400">
                           <a
-                            href={f.fileType === 'Academic File'
+                            href={f.fileType === 'Academic File' || f.fileType === 'Course File'
+                              ? `${API_BASE_URL}/api/files/view/academic/${f.id}`
+                              : `${API_BASE_URL}/api/files/view/department/${f.id}`
+                            }
+                            target="_blank"
+                            rel="noreferrer"
+                            className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 border border-blue-100 rounded-lg transition-all"
+                            title="View File in Browser"
+                          >
+                            <Eye size={13} />
+                          </a>
+                          <a
+                            href={f.fileType === 'Academic File' || f.fileType === 'Course File'
                               ? `${API_BASE_URL}/api/files/download/academic/${f.id}`
                               : `${API_BASE_URL}/api/files/download/department/${f.id}`
                             }
                             className="p-1 hover:text-blue-600 hover:bg-slate-50 border border-slate-100 rounded transition-all"
+                            title="Download File"
                           >
                             <Download size={13} />
                           </a>
-                          <button className="p-1 hover:text-blue-600 hover:bg-slate-50 border border-slate-100 rounded transition-all">
-                            <Eye size={13} />
-                          </button>
                         </div>
                       </td>
                     </tr>
@@ -628,8 +667,8 @@ const DirectorDashboard = () => {
               <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Track your previous comments and their status.</p>
             </div>
             
-            {feedbackHistory.length === 0 ? (
-              <div className="py-8 text-center text-slate-400 text-xs">
+            {safeFeedbackHistory.length === 0 ? (
+              <div className="py-8 text-center text-slate-400 text-xs font-semibold">
                 No feedback comment history logged.
               </div>
             ) : (
@@ -645,13 +684,13 @@ const DirectorDashboard = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {feedbackHistory.map(h => (
+                    {safeFeedbackHistory.map(h => (
                       <tr key={h.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors font-medium">
                         <td className="py-3.5 px-2 text-blue-600 font-bold truncate max-w-[150px]">{h.fileName}</td>
                         <td className="py-3.5 px-2 text-slate-700 italic">"{h.comment}"</td>
                         <td className="py-3.5 px-2 text-slate-500 font-bold">IQAC Invigilator</td>
                         <td className="py-3.5 px-2 text-slate-400">
-                          {new Date(h.date).toLocaleDateString()}
+                          {h.date ? new Date(h.date).toLocaleDateString() : '—'}
                         </td>
                         <td className="py-3.5 px-2">
                           <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${

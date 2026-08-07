@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Download, Trash2, Search } from 'lucide-react';
+import { Download, Trash2, Search, Eye } from 'lucide-react';
 import { isFppDocument } from '../utils/fppUtils';
 
 const MyUploads = () => {
@@ -130,8 +130,8 @@ const MyUploads = () => {
                   <td className="py-3.5 px-2 text-slate-500">{f.type}</td>
                   <td className="py-3.5 px-2 text-slate-700 font-bold">{f.documentType}</td>
                   <td className="py-3.5 px-2 text-slate-600">{f.courseName}</td>
-                  <td className="py-3.5 px-2 text-slate-400 font-semibold">
-                    {new Date(f.uploadedDate).toLocaleDateString()}
+                  <td className="py-3.5 px-2 text-slate-500 font-semibold whitespace-nowrap">
+                    {f.uploadedDate ? new Date(f.uploadedDate).toLocaleString('en-US', { month: 'short', day: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : '—'}
                   </td>
                   <td className="py-3.5 px-2">
                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
@@ -142,6 +142,19 @@ const MyUploads = () => {
                   </td>
                   <td className="py-3.5 px-2 text-right">
                     <div className="flex items-center justify-end space-x-1.5">
+                      <a
+                        href={f.type === 'Academic File' 
+                          ? `${API_BASE_URL}/api/files/view/academic/${f.id}`
+                          : `${API_BASE_URL}/api/files/view/department/${f.id}`
+                        }
+                        target="_blank"
+                        rel="noreferrer"
+                        className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg border border-blue-100 transition-colors flex items-center space-x-1 font-bold text-[10px]"
+                        title="View File in Browser"
+                      >
+                        <Eye size={13} />
+                        <span>View</span>
+                      </a>
                       <a
                         href={f.type === 'Academic File' 
                           ? `${API_BASE_URL}/api/files/download/academic/${f.id}`

@@ -1,19 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useAcademicYear } from '../context/AcademicYearContext';
 import { CalendarDays, Plus, Send, Trash2, CheckCircle, Clock, Edit2, Upload, Sparkles } from 'lucide-react';
 import IqacCalendarGrid from '../components/IqacCalendarGrid';
+import CreateAuditModal from '../components/CreateAuditModal';
+import SchedulePreviewModal from '../components/SchedulePreviewModal';
 
 const DirectorSchedulePage = () => {
   const { authFetch } = useAuth();
+  const { selectedAcademicYear } = useAcademicYear();
+  
   const [schedules, setSchedules] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [invigilators, setInvigilators] = useState([]);
   const [academicCalendar, setAcademicCalendar] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [calSubmitting, setCalSubmitting] = useState(false);
   
+  const [showCreateAuditModal, setShowCreateAuditModal] = useState(false);
+  const [showSchedulePreviewModal, setShowSchedulePreviewModal] = useState(false);
+  const [pendingSchedulePayload, setPendingSchedulePayload] = useState(null);
+
   const [showForm, setShowForm] = useState(false);
-  const [showCalForm, setShowCalForm] = useState(false);
+  const [showCalForm, setShowCalForm] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [editId, setEditId] = useState(null);
 
@@ -29,7 +39,7 @@ const DirectorSchedulePage = () => {
   });
 
   const [calForm, setCalForm] = useState({
-    academicYear: '2026-27 ODD SEM',
+    academicYear: `${selectedAcademicYear} ODD SEM`,
     reopeningDate: '2026-06-09',
     cat1Date: '2026-07-13',
     cat2Date: '2026-08-05',
@@ -38,6 +48,10 @@ const DirectorSchedulePage = () => {
     practicalExamDate: '2026-09-10',
     theoryExamDate: '2026-09-20',
   });
+
+  useEffect(() => {
+    setCalForm(prev => ({ ...prev, academicYear: `${selectedAcademicYear} ODD SEM` }));
+  }, [selectedAcademicYear]);
 
   const [calImageUploading, setCalImageUploading] = useState(false);
 
@@ -290,165 +304,14 @@ const DirectorSchedulePage = () => {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <button
-            onClick={() => setShowCalForm(!showCalForm)}
-            className="flex items-center space-x-2 bg-[#0A3D91] hover:bg-[#082E6E] text-white font-bold px-4 py-2 rounded-xl text-xs shadow-sm transition-all"
+            onClick={() => setShowCreateAuditModal(true)}
+            className="flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-md transition-all hover:shadow-lg"
           >
-            <Sparkles size={14} />
-            <span>Upload Academic Calendar</span>
-          </button>
-
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className="flex items-center space-x-2 bg-[#1A56DB] hover:bg-blue-600 text-white font-bold px-4 py-2 rounded-xl text-xs shadow-sm transition-all"
-          >
-            <Plus size={14} />
-            <span>New Schedule</span>
+            <Plus size={16} />
+            <span>CREATE AUDIT(S)</span>
           </button>
         </div>
       </div>
-
-      {/* Academic Calendar Upload & Config Form */}
-      {showCalForm && (
-        <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-md space-y-4 animate-fade-in">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <div>
-              <h3 className="font-bold text-slate-800 text-sm">Upload / Configure Academic Calendar</h3>
-              <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
-                Set key semester dates. The system will auto-allocate 10-day pre-reopening department FPP audits, Post CAT audits, and End Sem audits.
-              </p>
-            </div>
-            <button onClick={() => setShowCalForm(false)} className="text-slate-400 font-bold text-xs">✕</button>
-          </div>
-
-          <div className="bg-blue-50/60 border border-blue-100 rounded-xl p-3 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="flex items-center space-x-2">
-              <Upload size={16} className="text-[#0A3D91]" />
-              <div>
-                <p className="text-xs font-bold text-slate-800">Auto-Extract Dates from Calendar Image / PDF (OCR)</p>
-                <p className="text-[10px] text-slate-500 font-medium">Upload the Academic Calendar image or PDF file directly to extract dates and auto-generate MySQL schedules.</p>
-              </div>
-            </div>
-            <label className="bg-[#0A3D91] hover:bg-[#082E6E] text-white text-xs font-bold px-3 py-1.5 rounded-lg cursor-pointer transition-all flex-shrink-0">
-              {calImageUploading ? 'Processing OCR...' : 'Choose Image / PDF'}
-              <input
-                type="file"
-                accept="image/*,.pdf,.csv,.txt"
-                onChange={(e) => handleCalendarImageUpload(e.target.files[0])}
-                className="hidden"
-                disabled={calImageUploading}
-              />
-            </label>
-          </div>
-
-          <form onSubmit={handleSaveAcademicCalendar} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="md:col-span-4">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Academic Year / Semester *</label>
-              <input
-                required
-                type="text"
-                value={calForm.academicYear}
-                onChange={(e) => setCalForm({ ...calForm, academicYear: e.target.value })}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 font-semibold outline-none focus:border-blue-400"
-                placeholder="e.g. 2026-27 ODD SEMESTER (III & IV Year)"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[10px] font-bold text-[#0A3D91] uppercase tracking-wider mb-1">Reopening Date * (FPP -10 Days)</label>
-              <input
-                required
-                type="date"
-                value={calForm.reopeningDate}
-                onChange={(e) => setCalForm({ ...calForm, reopeningDate: e.target.value })}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 font-semibold outline-none focus:border-blue-400"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[10px] font-bold text-blue-600 uppercase tracking-wider mb-1">CAT I Date *</label>
-              <input
-                required
-                type="date"
-                value={calForm.cat1Date}
-                onChange={(e) => setCalForm({ ...calForm, cat1Date: e.target.value })}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 font-semibold outline-none focus:border-blue-400"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[10px] font-bold text-blue-600 uppercase tracking-wider mb-1">CAT II Date *</label>
-              <input
-                required
-                type="date"
-                value={calForm.cat2Date}
-                onChange={(e) => setCalForm({ ...calForm, cat2Date: e.target.value })}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 font-semibold outline-none focus:border-blue-400"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[10px] font-bold text-blue-600 uppercase tracking-wider mb-1">CAT III Date *</label>
-              <input
-                required
-                type="date"
-                value={calForm.cat3Date}
-                onChange={(e) => setCalForm({ ...calForm, cat3Date: e.target.value })}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 font-semibold outline-none focus:border-blue-400"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[10px] font-bold text-amber-600 uppercase tracking-wider mb-1">Last Working Day (LWD) *</label>
-              <input
-                required
-                type="date"
-                value={calForm.lastWorkingDay}
-                onChange={(e) => setCalForm({ ...calForm, lastWorkingDay: e.target.value })}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 font-semibold outline-none focus:border-blue-400"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[10px] font-bold text-purple-600 uppercase tracking-wider mb-1">Practical Exam Date *</label>
-              <input
-                required
-                type="date"
-                value={calForm.practicalExamDate}
-                onChange={(e) => setCalForm({ ...calForm, practicalExamDate: e.target.value })}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 font-semibold outline-none focus:border-blue-400"
-              />
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Theory Exam Date *</label>
-              <input
-                required
-                type="date"
-                value={calForm.theoryExamDate}
-                onChange={(e) => setCalForm({ ...calForm, theoryExamDate: e.target.value })}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 font-semibold outline-none focus:border-blue-400"
-              />
-            </div>
-
-            <div className="md:col-span-4 flex items-center justify-end space-x-3 pt-3 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setShowCalForm(false)}
-                className="bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold px-4 py-2 rounded-xl text-xs transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={calSubmitting}
-                className="bg-[#0A3D91] hover:bg-[#082E6E] disabled:bg-slate-200 text-white font-bold px-5 py-2 rounded-xl text-xs shadow-sm transition-all"
-              >
-                {calSubmitting ? 'Generating & Notifying...' : 'Generate & Publish Audit Calendar'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
 
       {/* Manual Single Schedule Form */}
       {showForm && (
@@ -620,30 +483,62 @@ const DirectorSchedulePage = () => {
                   {s.description && <p className="text-[10px] text-slate-400 font-medium mt-2">{s.description}</p>}
                 </div>
 
-                <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-50">
-                  {s.status === 'DRAFT' && (
-                    <button onClick={() => handlePublish(s.id)}
-                      className="flex items-center space-x-1 bg-[#0B1E3F] hover:bg-slate-700 text-white font-bold px-3 py-1.5 rounded-lg text-[10px] transition-all">
-                      <Send size= {11} />
-                      <span>Publish & Notify</span>
+                {s.status !== 'AUDIT_COMPLETED' ? (
+                  <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-50">
+                    {s.status === 'DRAFT' && (
+                      <button onClick={() => handlePublish(s.id)}
+                        className="flex items-center space-x-1 bg-[#0B1E3F] hover:bg-slate-700 text-white font-bold px-3 py-1.5 rounded-lg text-[10px] transition-all">
+                        <Send size={11} />
+                        <span>Publish & Notify</span>
+                      </button>
+                    )}
+                    <button onClick={() => startEdit(s)}
+                      className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg border border-slate-100 transition-all"
+                      title="Edit Schedule"
+                    >
+                      <Edit2 size={13} />
                     </button>
-                  )}
-                  <button onClick={() => startEdit(s)}
-                    className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg border border-slate-100 transition-all"
-                    title="Edit Schedule"
-                  >
-                    <Edit2 size={13} />
-                  </button>
-                  <button onClick={() => handleDelete(s.id)}
-                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg border border-slate-100 transition-all">
-                    <Trash2 size={13} />
-                  </button>
-                </div>
+                    <button onClick={() => handleDelete(s.id)}
+                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg border border-slate-100 transition-all"
+                      title="Delete Schedule"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="pt-2 border-t border-slate-50 flex items-center justify-between text-[10px]">
+                    <span className="bg-slate-100 text-slate-600 font-bold px-2.5 py-0.5 rounded-full border border-slate-200">
+                      🔒 Completed Audit Snapshot (Read-Only)
+                    </span>
+                    <span className="text-slate-500 font-bold">{s.year || ''} &bull; {s.semester || ''}</span>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         )}
       </div>
+
+      <CreateAuditModal
+        isOpen={showCreateAuditModal}
+        onClose={() => setShowCreateAuditModal(false)}
+        onAuditCreated={() => {
+          fetchSchedules();
+          alert('Audit(s) created successfully!');
+        }}
+        invigilators={invigilators}
+        departments={departments}
+      />
+
+      <SchedulePreviewModal
+        isOpen={showSchedulePreviewModal}
+        onClose={() => setShowSchedulePreviewModal(false)}
+        onConfirm={() => {
+          setShowSchedulePreviewModal(false);
+          fetchSchedules();
+        }}
+        scheduleData={pendingSchedulePayload}
+      />
     </div>
   );
 };

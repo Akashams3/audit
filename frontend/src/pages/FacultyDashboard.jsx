@@ -7,11 +7,13 @@ import {
 } from 'lucide-react';
 import { getDisplayFileName } from '../utils/formatUtils';
 
+import { isFppDocument } from '../utils/fppUtils';
 import IqacCalendarGrid from '../components/IqacCalendarGrid';
 
 const FacultyDashboard = () => {
   const { user, authFetch, API_BASE_URL } = useAuth();
 
+  const [selectedStudentYear, setSelectedStudentYear] = useState('1st Year');
   const [courseFiles, setCourseFiles] = useState([]);
   const [deptFiles, setDeptFiles] = useState([]);
   const [feedbackList, setFeedbackList] = useState([]);
@@ -72,7 +74,7 @@ const FacultyDashboard = () => {
     else { const e = await res.json(); alert(e.message || 'Failed to delete.'); }
   };
 
-  const courseRequired = requiredFiles.filter(r => r.fileCategory === 'ACADEMIC' || r.fileCategory === 'COURSE');
+  const courseRequired = requiredFiles.filter(r => (r.fileCategory === 'ACADEMIC' || r.fileCategory === 'COURSE') && isFppDocument(r));
   const deptRequired = requiredFiles.filter(r => r.fileCategory === 'DEPARTMENT');
 
   // Match uploaded file to required doc by documentType
@@ -97,11 +99,25 @@ const FacultyDashboard = () => {
             Hello, <strong className="text-slate-800">{user?.name}</strong>. Track your audit file submissions below.
           </p>
         </div>
-        <div className="flex items-center gap-2 text-xs flex-wrap">
-          <span className="bg-slate-100 text-slate-700 font-bold px-3 py-1.5 rounded-lg border border-slate-200 uppercase">
+        <div className="flex items-center gap-3 text-xs flex-wrap">
+          <div className="flex items-center space-x-1.5">
+            <span className="text-[10px] font-extrabold text-slate-400 uppercase">Year Level:</span>
+            <select
+              value={selectedStudentYear}
+              onChange={(e) => setSelectedStudentYear(e.target.value)}
+              className="bg-slate-50 border border-slate-200 text-slate-800 font-bold text-xs px-2.5 py-1 rounded-lg outline-none cursor-pointer focus:border-blue-500"
+            >
+              <option value="1st Year">1st Year</option>
+              <option value="2nd Year">2nd Year</option>
+              <option value="3rd Year">3rd Year</option>
+              <option value="4th Year">4th Year</option>
+              <option value="ALL">All Years</option>
+            </select>
+          </div>
+          <span className="bg-slate-100 text-slate-700 font-bold px-3 py-1 rounded-lg border border-slate-200 uppercase">
             {user?.department}
           </span>
-          <span className="bg-blue-50 text-[#0A3D91] font-bold px-3 py-1.5 rounded-lg border border-blue-100 uppercase">
+          <span className="bg-blue-50 text-[#0A3D91] font-bold px-3 py-1 rounded-lg border border-blue-100 uppercase">
             Faculty
           </span>
         </div>
@@ -145,7 +161,7 @@ const FacultyDashboard = () => {
                       {courseSubmitted}/{courseRequired.length}
                     </span>
                   </div>
-                  <Link to="/upload-course" className="text-[#0A3D91] hover:text-blue-800 text-xs font-bold flex items-center space-x-1">
+                  <Link to="/upload-academic" className="text-[#0A3D91] hover:text-blue-800 text-xs font-bold flex items-center space-x-1">
                     <Upload size={12} />
                     <span>Upload</span>
                     <ArrowRight size={12} />

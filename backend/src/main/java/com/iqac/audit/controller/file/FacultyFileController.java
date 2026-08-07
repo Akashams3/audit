@@ -124,7 +124,7 @@ public class FacultyFileController {
         Optional<AuditStatus> statusOpt = auditStatusRepository.findByDepartmentCode(deptCode);
         if (statusOpt.isPresent()) {
             String status = statusOpt.get().getStatus();
-            return status.equals("SUBMITTED_TO_AUDITOR") || status.equals("AUDIT_COMPLETED");
+            return "AUDIT_COMPLETED".equalsIgnoreCase(status);
         }
         return false;
     }
@@ -173,9 +173,11 @@ public class FacultyFileController {
                 if (rf.getStages() != null && !rf.getStages().isEmpty() && !rf.getStages().contains(stageEnum)) {
                     continue;
                 }
-                // (X) rule: X files should NOT have FPP
-                if (stageEnum == AuditStage.FPP && (rf.isXFile() || rf.getFileName().toLowerCase().contains("(x)"))) {
-                    continue;
+                if (stageEnum == AuditStage.FPP) {
+                    String fn = rf.getFileName().toLowerCase();
+                    if (rf.isXFile() || fn.contains("(x)") || fn.contains("pec") || fn.contains("committee") || fn.contains("cat ") || fn.contains("assessment") || fn.contains("attainment") || fn.contains("fast learner") || fn.contains("cycle")) {
+                        continue;
+                    }
                 }
             }
 
@@ -213,9 +215,28 @@ public class FacultyFileController {
     private AuditSchedule getBlockedSchedule(Faculty faculty, boolean[] isLate, LocalDateTime[] originalDeadline) {
         List<AuditSchedule> schedules = auditScheduleRepository.findAll();
         LocalDateTime now = LocalDateTime.now();
+        
+        boolean hasActiveUnexpiredSchedule = false;
         for (AuditSchedule s : schedules) {
-            if ("PUBLISHED".equals(s.getStatus())) {
-                if ("ALL".equals(s.getDepartmentCode()) || s.getDepartmentCode().equalsIgnoreCase(faculty.getDepartment().getCode())) {
+            if ("PUBLISHED".equalsIgnoreCase(s.getStatus())) {
+                if ("ALL".equalsIgnoreCase(s.getDepartmentCode()) || s.getDepartmentCode().equalsIgnoreCase(faculty.getDepartment().getCode())) {
+                    LocalTime dueTime = s.getDueTime() != null ? s.getDueTime() : LocalTime.MAX;
+                    LocalDateTime deadline = LocalDateTime.of(s.getDueDate(), dueTime);
+                    if (now.isBefore(deadline) || now.isEqual(deadline)) {
+                        hasActiveUnexpiredSchedule = true;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        if (hasActiveUnexpiredSchedule) {
+            return null; // Faculty has an active open schedule, upload allowed!
+        }
+
+        for (AuditSchedule s : schedules) {
+            if ("PUBLISHED".equalsIgnoreCase(s.getStatus())) {
+                if ("ALL".equalsIgnoreCase(s.getDepartmentCode()) || s.getDepartmentCode().equalsIgnoreCase(faculty.getDepartment().getCode())) {
                     LocalTime dueTime = s.getDueTime() != null ? s.getDueTime() : LocalTime.MAX;
                     LocalDateTime deadline = LocalDateTime.of(s.getDueDate(), dueTime);
                     if (now.isAfter(deadline)) {
@@ -223,10 +244,12 @@ public class FacultyFileController {
                                 .findFirstByFacultyIdAndScheduleIdOrderByRequestTimeDesc(faculty.getId(), s.getId());
                         if (reqOpt.isPresent()) {
                             LateUploadRequest req = reqOpt.get();
-                            if ("APPROVED".equals(req.getStatus()) && req.getExtendedDeadline() != null && now.isBefore(req.getExtendedDeadline())) {
-                                isLate[0] = true;
-                                originalDeadline[0] = deadline;
-                                continue;
+                            if ("APPROVED".equalsIgnoreCase(req.getStatus())) {
+                                if (req.getExtendedDeadline() == null || now.isBefore(req.getExtendedDeadline())) {
+                                    isLate[0] = true;
+                                    originalDeadline[0] = deadline;
+                                    continue;
+                                }
                             }
                         }
                         return s;
@@ -294,6 +317,30 @@ public class FacultyFileController {
         }
     }
 
+    @Autowired
+    private com.iqac.audit.repository.file.FileVersionRepository fileVersionRepository;
+
+    private static final List<String> ALLOWED_EXTENSIONS = Arrays.asList(
+        "pdf", "doc", "docx", "ppt", "pptx", "xls", "xlsx"
+    );
+    private static final long MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024; // 50MB
+
+    private void validateUploadedFile(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new RuntimeException("Please select a file or enter text content.");
+        }
+        if (file.getSize() > MAX_FILE_SIZE_BYTES) {
+            throw new RuntimeException("File exceeds the maximum allowed size.");
+        }
+        String originalName = file.getOriginalFilename();
+        if (originalName != null && originalName.contains(".")) {
+            String ext = originalName.substring(originalName.lastIndexOf(".") + 1).toLowerCase();
+            if (!ALLOWED_EXTENSIONS.contains(ext)) {
+                throw new RuntimeException("Unsupported file type. Please upload an allowed document format.");
+            }
+        }
+    }
+
     @PostMapping({"/academic-files"})
     public ResponseEntity<?> uploadAcademicFile(
             @RequestParam(value = "file", required = false) MultipartFile file,
@@ -307,7 +354,7 @@ public class FacultyFileController {
             Faculty faculty = getAuthenticatedFaculty();
             if (isAuditLocked(faculty.getDepartment().getCode())) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                        .body(Collections.singletonMap("message", "Cannot upload files: Department audit process has already started or completed."));
+                        .body(Collections.singletonMap("message", "This audit is closed. File submission is no longer available."));
             }
 
             boolean[] isLate = {false};
@@ -315,7 +362,7 @@ public class FacultyFileController {
             AuditSchedule blocked = getBlockedSchedule(faculty, isLate, originalDeadline);
             if (blocked != null) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                        .body(Collections.singletonMap("message", "Upload blocked: Deadline passed for schedule '" + blocked.getTitle() + "'. Please request permission."));
+                        .body(Collections.singletonMap("message", "Access denied. You are not assigned to this audit or the deadline has passed."));
             }
 
             MultipartFile uploadFile = file;
@@ -324,8 +371,23 @@ public class FacultyFileController {
                 uploadFile = new ByteArrayMultipartFile(pdfBytes, "file", documentType + ".pdf", "application/pdf");
             }
 
-            if (uploadFile == null || uploadFile.isEmpty()) {
-                return ResponseEntity.badRequest().body(Collections.singletonMap("message", "Please select a file or enter text content."));
+            validateUploadedFile(uploadFile);
+
+            // Check if existing file for versioning
+            List<AcademicFile> existingFiles = academicFileRepository.findByFacultyId(faculty.getId());
+            AcademicFile existing = existingFiles.stream()
+                    .filter(f -> documentType.equalsIgnoreCase(f.getDocumentType()))
+                    .findFirst().orElse(null);
+
+            if (existing != null) {
+                // Save current file as previous version in version history
+                List<com.iqac.audit.entity.file.FileVersion> history = fileVersionRepository.findByFileIdAndFileCategoryOrderByVersionNumberDesc(existing.getId(), "ACADEMIC");
+                int nextVer = history.isEmpty() ? 1 : history.get(0).getVersionNumber() + 1;
+                com.iqac.audit.entity.file.FileVersion ver = new com.iqac.audit.entity.file.FileVersion(
+                        existing.getId(), "ACADEMIC", existing.getFileName(), existing.getFilePath(),
+                        existing.getFileSize(), nextVer, existing.getUploadedBy(), existing.getStatus()
+                );
+                fileVersionRepository.save(ver);
             }
 
             AcademicFile savedFile = fileStorageService.storeAcademicFile(uploadFile, courseName, documentType, faculty, faculty.getUser().getUsername());
@@ -371,7 +433,7 @@ public class FacultyFileController {
             Faculty faculty = getAuthenticatedFaculty();
             if (isAuditLocked(faculty.getDepartment().getCode())) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                        .body(Collections.singletonMap("message", "Cannot upload files: Department audit process has already started or completed."));
+                        .body(Collections.singletonMap("message", "This audit is closed. File submission is no longer available."));
             }
 
             boolean[] isLate = {false};
@@ -379,7 +441,7 @@ public class FacultyFileController {
             AuditSchedule blocked = getBlockedSchedule(faculty, isLate, originalDeadline);
             if (blocked != null) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                        .body(Collections.singletonMap("message", "Upload blocked: Deadline passed for schedule '" + blocked.getTitle() + "'. Please request permission."));
+                        .body(Collections.singletonMap("message", "Access denied. You are not assigned to this audit or the deadline has passed."));
             }
 
             MultipartFile uploadFile = file;
@@ -388,8 +450,21 @@ public class FacultyFileController {
                 uploadFile = new ByteArrayMultipartFile(pdfBytes, "file", documentType + ".pdf", "application/pdf");
             }
 
-            if (uploadFile == null || uploadFile.isEmpty()) {
-                return ResponseEntity.badRequest().body(Collections.singletonMap("message", "Please select a file or enter text content."));
+            validateUploadedFile(uploadFile);
+
+            List<DepartmentFile> existingFiles = departmentFileRepository.findByFacultyId(faculty.getId());
+            DepartmentFile existing = existingFiles.stream()
+                    .filter(f -> documentType.equalsIgnoreCase(f.getDocumentType()))
+                    .findFirst().orElse(null);
+
+            if (existing != null) {
+                List<com.iqac.audit.entity.file.FileVersion> history = fileVersionRepository.findByFileIdAndFileCategoryOrderByVersionNumberDesc(existing.getId(), "DEPARTMENT");
+                int nextVer = history.isEmpty() ? 1 : history.get(0).getVersionNumber() + 1;
+                com.iqac.audit.entity.file.FileVersion ver = new com.iqac.audit.entity.file.FileVersion(
+                        existing.getId(), "DEPARTMENT", existing.getFileName(), existing.getFilePath(),
+                        existing.getFileSize(), nextVer, existing.getUploadedBy(), existing.getStatus()
+                );
+                fileVersionRepository.save(ver);
             }
 
             DepartmentFile savedFile = fileStorageService.storeDepartmentFile(uploadFile, documentType, faculty, faculty.getUser().getUsername());
@@ -418,6 +493,17 @@ public class FacultyFileController {
                     "UPLOAD", "Department File Uploaded");
 
             return ResponseEntity.ok(savedFile);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Collections.singletonMap("message", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/files/{fileCategory}/{fileId}/versions")
+    public ResponseEntity<?> getFileVersions(@PathVariable String fileCategory, @PathVariable Long fileId) {
+        try {
+            List<com.iqac.audit.entity.file.FileVersion> versions = fileVersionRepository
+                    .findByFileIdAndFileCategoryOrderByVersionNumberDesc(fileId, fileCategory.toUpperCase());
+            return ResponseEntity.ok(versions);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Collections.singletonMap("message", e.getMessage()));
         }

@@ -61,8 +61,11 @@ public class WebSecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> 
                 auth.requestMatchers("/api/auth/**").permitAll()
-                    .requestMatchers("/api/files/download/**").permitAll()
-                    .requestMatchers("/api/files/view/**").permitAll()
+                    .requestMatchers("/api/director/**").hasRole("DIRECTOR")
+                    .requestMatchers("/api/invigilator/**").hasAnyRole("INVIGILATOR", "DIRECTOR")
+                    .requestMatchers("/api/hod/**").hasAnyRole("HOD", "DIRECTOR")
+                    .requestMatchers("/api/faculty/**").hasAnyRole("FACULTY", "HOD", "INVIGILATOR", "DIRECTOR")
+                    .requestMatchers("/api/files/download/**", "/api/files/view/**").authenticated()
                     .anyRequest().authenticated()
             );
 

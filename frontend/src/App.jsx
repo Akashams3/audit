@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { AcademicYearProvider } from './context/AcademicYearContext';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import DashboardHome from './pages/DashboardHome';
@@ -9,7 +10,7 @@ import DepartmentFileUpload from './pages/DepartmentFileUpload';
 import MyUploads from './pages/MyUploads';
 import FeedbackHistoryPage from './pages/FeedbackHistoryPage';
 import DepartmentsPage from './pages/DepartmentsPage';
-import IqacDashboard from './pages/IqacDashboard';
+import CoordinatorDashboard from './pages/CoordinatorDashboard';
 import Profile from './pages/Profile';
 import NotificationsPage from './pages/NotificationsPage';
 import ReportsPage from './pages/ReportsPage';
@@ -28,6 +29,9 @@ import DirectorProgressPage from './pages/DirectorProgressPage';
 import DirectorRolesPage from './pages/DirectorRolesPage';
 import InvigilatorAddUserPage from './pages/InvigilatorAddUserPage';
 import LateUploadRequestsPage from './pages/LateUploadRequestsPage';
+import DirectorAuditStagePage from './pages/DirectorAuditStagePage';
+import DirectorAuditHistoryPage from './pages/DirectorAuditHistoryPage';
+import AuditLogPage from './pages/AuditLogPage';
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { user } = useAuth();
@@ -46,7 +50,8 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 const App = () => {
   return (
     <AuthProvider>
-      <BrowserRouter>
+      <AcademicYearProvider>
+        <BrowserRouter>
         <Routes>
           {/* Public Login Route */}
           <Route path="/login" element={<Login />} />
@@ -101,7 +106,7 @@ const App = () => {
             path="/auditor"
             element={
               <ProtectedRoute allowedRoles={['ROLE_INVIGILATOR', 'ROLE_DIRECTOR']}>
-                <IqacDashboard />
+                <CoordinatorDashboard />
               </ProtectedRoute>
             }
           />
@@ -117,7 +122,7 @@ const App = () => {
             path="/academic"
             element={
               <ProtectedRoute allowedRoles={['ROLE_INVIGILATOR', 'ROLE_DIRECTOR']}>
-                <IqacDashboard />
+                <CoordinatorDashboard />
               </ProtectedRoute>
             }
           />
@@ -125,7 +130,7 @@ const App = () => {
             path="/dept-files"
             element={
               <ProtectedRoute allowedRoles={['ROLE_INVIGILATOR', 'ROLE_DIRECTOR']}>
-                <IqacDashboard />
+                <CoordinatorDashboard />
               </ProtectedRoute>
             }
           />
@@ -133,7 +138,7 @@ const App = () => {
             path="/faculty"
             element={
               <ProtectedRoute allowedRoles={['ROLE_INVIGILATOR', 'ROLE_DIRECTOR']}>
-                <IqacDashboard />
+                <CoordinatorDashboard />
               </ProtectedRoute>
             }
           />
@@ -158,7 +163,23 @@ const App = () => {
             }
           />
 
-          {/* Director Schedule & Required Files */}
+          {/* Director Schedule & Required Files & Stage Control */}
+          <Route
+            path="/director/audit-stage"
+            element={
+              <ProtectedRoute allowedRoles={['ROLE_DIRECTOR']}>
+                <DirectorAuditStagePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/director/audit-history"
+            element={
+              <ProtectedRoute allowedRoles={['ROLE_DIRECTOR']}>
+                <DirectorAuditHistoryPage />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/director/schedule"
             element={
@@ -359,10 +380,21 @@ const App = () => {
             }
           />
 
+          {/* Audit Logs Route */}
+          <Route
+            path="/audit-logs"
+            element={
+              <ProtectedRoute allowedRoles={['ROLE_DIRECTOR']}>
+                <AuditLogPage />
+              </ProtectedRoute>
+            }
+          />
+
           {/* Fallback Catch-all Redirect */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
+      </AcademicYearProvider>
     </AuthProvider>
   );
 };

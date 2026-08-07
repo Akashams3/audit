@@ -43,6 +43,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -112,11 +113,40 @@ public class DirectorAuditController {
     @Autowired
     private FacultyRoleRepository facultyRoleRepository;
 
+    @Autowired
+    private com.iqac.audit.repository.academic.AcademicYearRepository academicYearRepository;
+
+    @Autowired
+    private com.iqac.audit.repository.audit.AuditRepository auditRepository;
+
+    @Autowired
+    private com.iqac.audit.repository.audit.AuditLogRepository auditLogRepository;
+
+    @Autowired
+    private com.iqac.audit.service.audit.AuditLogService auditLogService;
+
     @GetMapping("/dashboard")
-    public ResponseEntity<?> getDashboardStats() {
+    public ResponseEntity<?> getDashboardStats(
+            @RequestParam(value = "year", required = false) String year,
+            @RequestParam(value = "academicYear", required = false) String academicYear) {
         List<Department> departments = departmentRepository.findAll();
         long totalDepartments = departments.size();
-        List<RequiredFile> requiredFiles = requiredFileRepository.findAll();
+        
+        List<RequiredFile> allReq = requiredFileRepository.findAll();
+        List<RequiredFile> requiredFiles = new ArrayList<>();
+        for (RequiredFile rf : allReq) {
+            if (year != null && !year.trim().isEmpty() && !"ALL".equalsIgnoreCase(year)) {
+                if (!"ALL".equalsIgnoreCase(rf.getYear()) && !rf.getYear().equalsIgnoreCase(year)) {
+                    continue;
+                }
+            }
+            if (academicYear != null && !academicYear.trim().isEmpty() && !"ALL".equalsIgnoreCase(academicYear)) {
+                if (!"ALL".equalsIgnoreCase(rf.getAcademicYear()) && !rf.getAcademicYear().equalsIgnoreCase(academicYear)) {
+                    continue;
+                }
+            }
+            requiredFiles.add(rf);
+        }
 
         long globalExpectedAcademic = 0;
         long globalSubmittedAcademic = 0;
@@ -193,10 +223,27 @@ public class DirectorAuditController {
     }
 
     @GetMapping("/department-summary")
-    public ResponseEntity<?> getDepartmentSummary() {
+    public ResponseEntity<?> getDepartmentSummary(
+            @RequestParam(value = "year", required = false) String year,
+            @RequestParam(value = "academicYear", required = false) String academicYear) {
         List<Department> departments = departmentRepository.findAll();
         List<Map<String, Object>> summaryList = new ArrayList<>();
-        List<RequiredFile> requiredFiles = requiredFileRepository.findAll();
+        
+        List<RequiredFile> allReq = requiredFileRepository.findAll();
+        List<RequiredFile> requiredFiles = new ArrayList<>();
+        for (RequiredFile rf : allReq) {
+            if (year != null && !year.trim().isEmpty() && !"ALL".equalsIgnoreCase(year)) {
+                if (!"ALL".equalsIgnoreCase(rf.getYear()) && !rf.getYear().equalsIgnoreCase(year)) {
+                    continue;
+                }
+            }
+            if (academicYear != null && !academicYear.trim().isEmpty() && !"ALL".equalsIgnoreCase(academicYear)) {
+                if (!"ALL".equalsIgnoreCase(rf.getAcademicYear()) && !rf.getAcademicYear().equalsIgnoreCase(academicYear)) {
+                    continue;
+                }
+            }
+            requiredFiles.add(rf);
+        }
 
         for (Department d : departments) {
             Map<String, Object> map = new HashMap<>();
@@ -278,6 +325,27 @@ public class DirectorAuditController {
                     lastUpdated = file.getUploadedDate();
                 }
             }
+            boolean deadlineExpired = true;
+            boolean hasPublishedSchedule = false;
+            LocalDate activeDueDate = null;
+            List<AuditSchedule> schedules = auditScheduleRepository.findAll();
+            for (AuditSchedule s : schedules) {
+                if ("PUBLISHED".equalsIgnoreCase(s.getStatus()) && (s.getDepartmentCode().equalsIgnoreCase("ALL") || s.getDepartmentCode().equalsIgnoreCase(d.getCode()))) {
+                    hasPublishedSchedule = true;
+                    LocalTime dueTime = s.getDueTime() != null ? s.getDueTime() : LocalTime.MAX;
+                    LocalDateTime deadline = LocalDateTime.of(s.getDueDate(), dueTime);
+                    if (!LocalDateTime.now().isAfter(deadline)) {
+                        deadlineExpired = false;
+                        activeDueDate = s.getDueDate();
+                        break;
+                    }
+                }
+            }
+            if (!hasPublishedSchedule) {
+                deadlineExpired = false;
+            }
+            map.put("activeDueDate", activeDueDate);
+            map.put("deadlineExpired", deadlineExpired);
             map.put("lastUpdated", lastUpdated);
 
             summaryList.add(map);
@@ -515,6 +583,7 @@ public class DirectorAuditController {
         }
 
         for (IqacInvigilator inv : invigilators) {
+            if (inv == null || inv.getUser() == null) continue;
             try {
                 notificationService.createNotification(inv.getUser(),
                         "New audit schedule published: '" + schedule.getTitle() + "' — Audit Date: " + schedule.getAuditDate() + ", Due: " + schedule.getDueDate(),
@@ -528,7 +597,9 @@ public class DirectorAuditController {
                         "<li><strong>Due Date:</strong> " + schedule.getDueDate() + "</li></ul>" +
                         "<p>Please review and ensure all files are submitted before the due date.</p>" +
                         "<p>Best regards,<br/>IQAC Director</p></body></html>";
-                emailService.sendHtmlEmail(inv.getUser().getEmail(), "New Audit Schedule: " + schedule.getTitle(), html);
+                if (inv.getUser().getEmail() != null) {
+                    emailService.sendHtmlEmail(inv.getUser().getEmail(), "New Audit Schedule: " + schedule.getTitle(), html);
+                }
             } catch (Exception e) {
                 System.err.println("Failed to notify invigilator " + inv.getName() + ": " + e.getMessage());
             }
@@ -544,19 +615,22 @@ public class DirectorAuditController {
         }
 
         for (Hod hod : hods) {
+            if (hod == null || hod.getUser() == null) continue;
             try {
                 notificationService.createNotification(hod.getUser(),
-                        "New audit schedule published for department " + (deptCode.equals("ALL") ? "All" : deptCode) + ": '" + schedule.getTitle() + "' — Audit Date: " + schedule.getAuditDate() + ", Due: " + schedule.getDueDate(),
+                        "New audit schedule published for department " + ("ALL".equals(deptCode) ? "All" : deptCode) + ": '" + schedule.getTitle() + "' — Audit Date: " + schedule.getAuditDate() + ", Due: " + schedule.getDueDate(),
                         "SCHEDULE", "New Audit Schedule");
                 String html = "<html><body>" +
                         "<h3 style='color:#1A56DB;'>New Audit Schedule Published</h3>" +
                         "<p>Dear HOD " + hod.getName() + ",</p>" +
-                        "<p>The IQAC Director has published a new audit schedule for " + (deptCode.equals("ALL") ? "All Departments" : deptCode) + ":</p>" +
+                        "<p>The IQAC Director has published a new audit schedule for " + ("ALL".equals(deptCode) ? "All Departments" : deptCode) + ":</p>" +
                         "<ul><li><strong>Title:</strong> " + schedule.getTitle() + "</li>" +
                         "<li><strong>Audit Date:</strong> " + schedule.getAuditDate() + "</li>" +
                         "<li><strong>Due Date:</strong> " + schedule.getDueDate() + "</li></ul>" +
                         "<p>Best regards,<br/>IQAC Director</p></body></html>";
-                emailService.sendHtmlEmail(hod.getUser().getEmail(), "New Audit Schedule: " + schedule.getTitle(), html);
+                if (hod.getUser().getEmail() != null) {
+                    emailService.sendHtmlEmail(hod.getUser().getEmail(), "New Audit Schedule: " + schedule.getTitle(), html);
+                }
             } catch (Exception e) {
                 System.err.println("Failed to notify HOD " + hod.getName() + ": " + e.getMessage());
             }
@@ -579,6 +653,13 @@ public class DirectorAuditController {
     @PostMapping("/academic-calendar")
     public ResponseEntity<?> createAcademicCalendar(@RequestBody Map<String, Object> payload) {
         try {
+            if (payload == null || payload.get("reopeningDate") == null || payload.get("cat1Date") == null
+                    || payload.get("cat2Date") == null || payload.get("cat3Date") == null
+                    || payload.get("lastWorkingDay") == null || payload.get("practicalExamDate") == null
+                    || payload.get("theoryExamDate") == null) {
+                return ResponseEntity.badRequest().body(Collections.singletonMap("message", "All key semester dates (Reopening, CAT I, II, III, Last Working Day, Practical, Theory) are required."));
+            }
+
             String academicYear = payload.getOrDefault("academicYear", "2026-27 ODD SEM").toString();
             LocalDate reopeningDate = parseDate(payload.get("reopeningDate").toString());
             LocalDate cat1Date = parseDate(payload.get("cat1Date").toString());
@@ -768,21 +849,45 @@ public class DirectorAuditController {
             if ("END_SEM".equals(stageStr)) stageStr = "POST_CAT_3";
             AuditStage stageEnum = AuditStage.valueOf(stageStr);
 
+            String academicYear = payload.getOrDefault("academicYear", "2026-27");
+            String yearLevel = payload.getOrDefault("year", "1st Year");
+            String semester = payload.getOrDefault("semester", "ODD");
+
+            // Validate schedule existence: Must have an active AuditSchedule or Audit for this Academic Year & Year Level
+            List<AuditSchedule> schedules = auditScheduleRepository.findAll();
+            boolean hasSchedule = schedules.stream().anyMatch(s -> 
+                !"AUDIT_COMPLETED".equalsIgnoreCase(s.getStatus()) &&
+                (s.getYear() == null || s.getYear().equalsIgnoreCase(yearLevel) || s.getYear().equalsIgnoreCase("ALL"))
+            );
+
+            List<com.iqac.audit.entity.audit.Audit> audits = auditRepository.findByAcademicYearAndYearLevelAndArchivedFalse(academicYear, yearLevel);
+            if (!audits.isEmpty()) {
+                hasSchedule = true;
+            }
+
+            if (!hasSchedule) {
+                String errorMsg = "Cannot start audit stage: No audit schedule found for Academic Year '" + academicYear + "', Year Level '" + yearLevel + "', and Semester '" + semester + "'. Please create or generate an Audit Schedule first.";
+                return ResponseEntity.badRequest().body(Collections.singletonMap("message", errorMsg));
+            }
+
             ensureMasterRequiredFilesSeeded();
 
             List<RequiredFile> allFiles = requiredFileRepository.findAll();
             List<RequiredFile> matched = new ArrayList<>();
             for (RequiredFile rf : allFiles) {
                 if (rf.getStages() != null && rf.getStages().contains(stageEnum)) {
-                    if (stageEnum == AuditStage.FPP && (rf.isXFile() || rf.getFileName().contains("(X)"))) {
-                        continue;
+                    if (stageEnum == AuditStage.FPP) {
+                        String fn = rf.getFileName().toLowerCase();
+                        if (rf.isXFile() || fn.contains("(x)") || fn.contains("pec") || fn.contains("committee") || fn.contains("cat ") || fn.contains("assessment") || fn.contains("attainment") || fn.contains("fast learner") || fn.contains("cycle")) {
+                            continue;
+                        }
                     }
                     matched.add(rf);
                 }
             }
 
             return ResponseEntity.ok(Map.of(
-                "message", "Successfully started " + stageStr + " audit! " + matched.size() + " required files loaded from database.",
+                "message", "Successfully started " + stageStr + " audit stage for " + academicYear + " (" + yearLevel + ", " + semester + " Sem)! " + matched.size() + " required files activated.",
                 "count", matched.size(),
                 "files", matched
             ));
@@ -808,46 +913,46 @@ public class DirectorAuditController {
         Set<AuditStage> fppAndPostCat1 = EnumSet.of(AuditStage.FPP, AuditStage.POST_CAT_1);
         Set<AuditStage> allPostCatStages = EnumSet.of(AuditStage.POST_CAT_1, AuditStage.POST_CAT_2, AuditStage.POST_CAT_3);
 
-        createOrUpdateRequiredFile("Curriculum", "ACADEMIC", "Curriculum Document", true, false, allStages, "ALL", "ALL", null);
-        createOrUpdateRequiredFile("Syllabus", "ACADEMIC", "Syllabus Document", true, false, allStages, "ALL", "ALL", null);
-        createOrUpdateRequiredFile("CO, PO, PSO Mapping", "ACADEMIC", "CO, PO, PSO Mapping Document", true, false, allStages, "ALL", "ALL", null);
-        createOrUpdateRequiredFile("Lesson Planning", "ACADEMIC", "Lesson Planning Sheet", true, false, allStages, "ALL", "ALL", null);
-        createOrUpdateRequiredFile("Pedagogy / Reports", "ACADEMIC", "Pedagogy Reports", false, false, allStages, "ALL", "ALL", null);
-        createOrUpdateRequiredFile("Course Committee Meeting – I", "ACADEMIC", "Course Committee Meeting 1 Minutes", true, false, fppAndPostCat1, "ALL", "ALL", null);
-        createOrUpdateRequiredFile("Course Committee Meeting – II", "ACADEMIC", "Course Committee Meeting 2 Minutes", true, false, postCat2Only, "ALL", "ALL", null);
-        createOrUpdateRequiredFile("Course Committee Meeting – III", "ACADEMIC", "Course Committee Meeting 3 Minutes", true, false, postCat3Only, "ALL", "ALL", null);
-        createOrUpdateRequiredFile("Assignment Details", "ACADEMIC", "Assignment Details and Questions", false, false, allStages, "ALL", "ALL", null);
-        createOrUpdateRequiredFile("Course PPT", "ACADEMIC", "Course PPT Presentation", false, false, allStages, "ALL", "ALL", null);
-        createOrUpdateRequiredFile("Green Book", "ACADEMIC", "Green Book Record", true, false, allStages, "ALL", "ALL", null);
-        createOrUpdateRequiredFile("Blue Book", "ACADEMIC", "Blue Book Record", true, false, allStages, "ALL", "ALL", null);
-        createOrUpdateRequiredFile("CAT 1 Question Paper & Answer Key (X)", "ACADEMIC", "CAT 1 Question Paper & Answer Key", true, true, postCat1Only, "ALL", "ALL", null);
-        createOrUpdateRequiredFile("CAT 2 Question Paper & Answer Key (X)", "ACADEMIC", "CAT 2 Question Paper & Answer Key", true, true, postCat2Only, "ALL", "ALL", null);
-        createOrUpdateRequiredFile("CAT 3 Question Paper & Answer Key (X)", "ACADEMIC", "CAT 3 Question Paper & Answer Key", true, true, postCat3Only, "ALL", "ALL", null);
-        createOrUpdateRequiredFile("Internal Assessment Answer Script Sample (X)", "ACADEMIC", "Internal Assessment Answer Script Sample", true, true, allPostCatStages, "ALL", "ALL", null);
-        createOrUpdateRequiredFile("Faculty Evaluator Name", "ACADEMIC", "Faculty Evaluator Name", false, false, allStages, "ALL", "ALL", null);
-        createOrUpdateRequiredFile("Remarks", "ACADEMIC", "Academic Remarks", false, false, allStages, "ALL", "ALL", null);
-        createOrUpdateRequiredFile("Cycle 1", "ACADEMIC", "Cycle 1 File", false, false, postCat1Only, "ALL", "ALL", null);
-        createOrUpdateRequiredFile("Cycle 2", "ACADEMIC", "Cycle 2 File", false, false, postCat2Only, "ALL", "ALL", null);
-        createOrUpdateRequiredFile("Cycle 3", "ACADEMIC", "Cycle 3 File", false, false, postCat3Only, "ALL", "ALL", null);
-        createOrUpdateRequiredFile("Faculty", "DEPARTMENT", "Faculty List & Details", true, false, allStages, "ALL", "ALL", null);
-        createOrUpdateRequiredFile("Remarks", "DEPARTMENT", "Department Remarks", false, false, allStages, "ALL", "ALL", null);
-        createOrUpdateRequiredFile("CO-PO Attainment Sheet (X)", "ACADEMIC", "CO-PO Attainment Sheet", true, true, postCat3Only, "ALL", "ALL", null);
-        createOrUpdateRequiredFile("IMS Update", "ACADEMIC", "IMS Update Confirmation", true, false, allStages, "ALL", "ALL", null);
-        createOrUpdateRequiredFile("Mentor Details", "ACADEMIC", "Mentor Details & Formats", true, false, allStages, "ALL", "ALL", mentor);
-        createOrUpdateRequiredFile("Class Committee Meeting 1 (X)", "ACADEMIC", "Class Committee Meeting 1 Minutes", true, true, postCat1Only, "ALL", "ALL", classIncharge);
-        createOrUpdateRequiredFile("Class Committee Meeting 2 (X)", "ACADEMIC", "Class Committee Meeting 2 Minutes", true, true, postCat2Only, "ALL", "ALL", classIncharge);
-        createOrUpdateRequiredFile("Class Committee Meeting 3 (X)", "ACADEMIC", "Class Committee Meeting 3 Minutes", true, true, postCat3Only, "ALL", "ALL", classIncharge);
-        createOrUpdateRequiredFile("Mini Project", "ACADEMIC", "Mini Project Details & Guide Reports", false, false, allStages, "ALL", "ALL", miniProjectMentor);
-        createOrUpdateRequiredFile("Project", "ACADEMIC", "Major Project Reports", false, false, allStages, "ALL", "ALL", projectMentor);
-        createOrUpdateRequiredFile("PEC Seminar (X)", "ACADEMIC", "PEC Seminar Documents", false, true, allPostCatStages, "ALL", "ALL", null);
-        createOrUpdateRequiredFile("PEC Student Attendance (X)", "ACADEMIC", "PEC Student Attendance", false, true, allPostCatStages, "ALL", "ALL", null);
-        createOrUpdateRequiredFile("PEC Delivery Content (X)", "ACADEMIC", "PEC Delivery Content", false, true, allPostCatStages, "ALL", "ALL", null);
-        createOrUpdateRequiredFile("PEC Assessment (X)", "ACADEMIC", "PEC Assessment Details", false, true, allPostCatStages, "ALL", "ALL", null);
-        createOrUpdateRequiredFile("Assessment Outcome (X)", "ACADEMIC", "Assessment Outcome Report", false, true, postCat3Only, "ALL", "ALL", null);
-        createOrUpdateRequiredFile("Course File", "ACADEMIC", "Overall Course File", true, false, allStages, "ALL", "ALL", null);
-        createOrUpdateRequiredFile("Fast Learner Encouragement (X)", "ACADEMIC", "Fast Learner Encouragement Details", false, true, allPostCatStages, "ALL", "ALL", null);
-        createOrUpdateRequiredFile("Course Notes", "ACADEMIC", "Course Notes & Handouts", false, false, allStages, "ALL", "ALL", null);
-        createOrUpdateRequiredFile("Lab Manual", "ACADEMIC", "Lab Manual", false, false, allStages, "ALL", "ALL", null);
+        createOrUpdateRequiredFile("Curriculum", "ACADEMIC", "[Stage: FPP, Post CAT 1, Post CAT 2, End Sem] Curriculum Document", true, false, allStages, "ALL", "ALL", null);
+        createOrUpdateRequiredFile("Syllabus", "ACADEMIC", "[Stage: FPP, Post CAT 1, Post CAT 2, End Sem] Syllabus Document", true, false, allStages, "ALL", "ALL", null);
+        createOrUpdateRequiredFile("CO, PO, PSO Mapping", "ACADEMIC", "[Stage: FPP, Post CAT 1, Post CAT 2, End Sem] CO, PO, PSO Mapping Document", true, false, allStages, "ALL", "ALL", null);
+        createOrUpdateRequiredFile("Lesson Planning", "ACADEMIC", "[Stage: FPP, Post CAT 1, Post CAT 2, End Sem] Lesson Planning Sheet", true, false, allStages, "ALL", "ALL", null);
+        createOrUpdateRequiredFile("Pedagogy / Reports", "ACADEMIC", "[Stage: FPP, Post CAT 1, Post CAT 2, End Sem] Pedagogy Reports", false, false, allStages, "ALL", "ALL", null);
+        createOrUpdateRequiredFile("Course Committee Meeting – I", "ACADEMIC", "[Stage: Post CAT 1 Only] Course Committee Meeting 1 Minutes", true, false, postCat1Only, "ALL", "ALL", null);
+        createOrUpdateRequiredFile("Course Committee Meeting – II", "ACADEMIC", "[Stage: Post CAT 2 Only] Course Committee Meeting 2 Minutes", true, false, postCat2Only, "ALL", "ALL", null);
+        createOrUpdateRequiredFile("Course Committee Meeting – III", "ACADEMIC", "[Stage: End Sem Only] Course Committee Meeting 3 Minutes", true, false, postCat3Only, "ALL", "ALL", null);
+        createOrUpdateRequiredFile("Assignment Details", "ACADEMIC", "[Stage: FPP, Post CAT 1, Post CAT 2, End Sem] Assignment Details and Questions", false, false, allStages, "ALL", "ALL", null);
+        createOrUpdateRequiredFile("Course PPT", "ACADEMIC", "[Stage: FPP, Post CAT 1, Post CAT 2, End Sem] Course PPT Presentation", false, false, allStages, "ALL", "ALL", null);
+        createOrUpdateRequiredFile("Green Book", "ACADEMIC", "[Stage: FPP, Post CAT 1, Post CAT 2, End Sem] Green Book Record", true, false, allStages, "ALL", "ALL", null);
+        createOrUpdateRequiredFile("Blue Book", "ACADEMIC", "[Stage: FPP, Post CAT 1, Post CAT 2, End Sem] Blue Book Record", true, false, allStages, "ALL", "ALL", null);
+        createOrUpdateRequiredFile("CAT 1 Question Paper & Answer Key (X)", "ACADEMIC", "[Stage: Post CAT 1 Only] CAT 1 Question Paper & Answer Key", true, true, postCat1Only, "ALL", "ALL", null);
+        createOrUpdateRequiredFile("CAT 2 Question Paper & Answer Key (X)", "ACADEMIC", "[Stage: Post CAT 2 Only] CAT 2 Question Paper & Answer Key", true, true, postCat2Only, "ALL", "ALL", null);
+        createOrUpdateRequiredFile("CAT 3 Question Paper & Answer Key (X)", "ACADEMIC", "[Stage: End Sem Only] CAT 3 Question Paper & Answer Key", true, true, postCat3Only, "ALL", "ALL", null);
+        createOrUpdateRequiredFile("Internal Assessment Answer Script Sample (X)", "ACADEMIC", "[Stage: Post CAT 1, Post CAT 2, End Sem] Internal Assessment Answer Script Sample", true, true, allPostCatStages, "ALL", "ALL", null);
+        createOrUpdateRequiredFile("Faculty Evaluator Name", "ACADEMIC", "[Stage: FPP, Post CAT 1, Post CAT 2, End Sem] Faculty Evaluator Name", false, false, allStages, "ALL", "ALL", null);
+        createOrUpdateRequiredFile("Remarks", "ACADEMIC", "[Stage: FPP, Post CAT 1, Post CAT 2, End Sem] Academic Remarks", false, false, allStages, "ALL", "ALL", null);
+        createOrUpdateRequiredFile("Cycle 1", "ACADEMIC", "[Stage: Post CAT 1 Only] Cycle 1 File", false, false, postCat1Only, "ALL", "ALL", null);
+        createOrUpdateRequiredFile("Cycle 2", "ACADEMIC", "[Stage: Post CAT 2 Only] Cycle 2 File", false, false, postCat2Only, "ALL", "ALL", null);
+        createOrUpdateRequiredFile("Cycle 3", "ACADEMIC", "[Stage: End Sem Only] Cycle 3 File", false, false, postCat3Only, "ALL", "ALL", null);
+        createOrUpdateRequiredFile("Faculty", "DEPARTMENT", "[Stage: FPP, Post CAT 1, Post CAT 2, End Sem] Faculty List & Details", true, false, allStages, "ALL", "ALL", null);
+        createOrUpdateRequiredFile("Remarks", "DEPARTMENT", "[Stage: FPP, Post CAT 1, Post CAT 2, End Sem] Department Remarks", false, false, allStages, "ALL", "ALL", null);
+        createOrUpdateRequiredFile("CO-PO Attainment Sheet (X)", "ACADEMIC", "[Stage: Post CAT 1, Post CAT 2, End Sem] CO-PO Attainment Sheet", true, true, allPostCatStages, "ALL", "ALL", null);
+        createOrUpdateRequiredFile("IMS Update", "ACADEMIC", "[Stage: FPP, Post CAT 1, Post CAT 2, End Sem] IMS Update Confirmation", true, false, allStages, "ALL", "ALL", null);
+        createOrUpdateRequiredFile("Mentor Details", "ACADEMIC", "[Stage: FPP, Post CAT 1, Post CAT 2, End Sem] Mentor Details & Formats", true, false, allStages, "ALL", "ALL", mentor);
+        createOrUpdateRequiredFile("Class Committee Meeting 1 (X)", "ACADEMIC", "[Stage: Post CAT 1 Only] Class Committee Meeting 1 Minutes", true, true, postCat1Only, "ALL", "ALL", classIncharge);
+        createOrUpdateRequiredFile("Class Committee Meeting 2 (X)", "ACADEMIC", "[Stage: Post CAT 2 Only] Class Committee Meeting 2 Minutes", true, true, postCat2Only, "ALL", "ALL", classIncharge);
+        createOrUpdateRequiredFile("Class Committee Meeting 3 (X)", "ACADEMIC", "[Stage: End Sem Only] Class Committee Meeting 3 Minutes", true, true, postCat3Only, "ALL", "ALL", classIncharge);
+        createOrUpdateRequiredFile("Mini Project", "ACADEMIC", "[Stage: FPP, Post CAT 1, Post CAT 2, End Sem] Mini Project Details & Guide Reports", false, false, allStages, "ALL", "ALL", miniProjectMentor);
+        createOrUpdateRequiredFile("Project", "ACADEMIC", "[Stage: FPP, Post CAT 1, Post CAT 2, End Sem] Major Project Reports", false, false, allStages, "ALL", "ALL", projectMentor);
+        createOrUpdateRequiredFile("PEC Seminar (X)", "ACADEMIC", "[Stage: Post CAT 1, Post CAT 2, End Sem] PEC Seminar Documents", false, true, allPostCatStages, "ALL", "ALL", null);
+        createOrUpdateRequiredFile("PEC Student Attendance (X)", "ACADEMIC", "[Stage: Post CAT 1, Post CAT 2, End Sem] PEC Student Attendance", false, true, allPostCatStages, "ALL", "ALL", null);
+        createOrUpdateRequiredFile("PEC Delivery Content (X)", "ACADEMIC", "[Stage: Post CAT 1, Post CAT 2, End Sem] PEC Delivery Content", false, true, allPostCatStages, "ALL", "ALL", null);
+        createOrUpdateRequiredFile("PEC Assessment (X)", "ACADEMIC", "[Stage: Post CAT 1, Post CAT 2, End Sem] PEC Assessment Details", false, true, allPostCatStages, "ALL", "ALL", null);
+        createOrUpdateRequiredFile("Assessment Outcome (X)", "ACADEMIC", "[Stage: Post CAT 1, Post CAT 2, End Sem] Assessment Outcome Report", false, true, allPostCatStages, "ALL", "ALL", null);
+        createOrUpdateRequiredFile("Course File", "ACADEMIC", "[Stage: FPP, Post CAT 1, Post CAT 2, End Sem] Overall Course File", true, false, allStages, "ALL", "ALL", null);
+        createOrUpdateRequiredFile("Fast Learner Encouragement (X)", "ACADEMIC", "[Stage: Post CAT 1, Post CAT 2, End Sem] Fast Learner Encouragement Details", false, true, allPostCatStages, "ALL", "ALL", null);
+        createOrUpdateRequiredFile("Course Notes", "ACADEMIC", "[Stage: FPP, Post CAT 1, Post CAT 2, End Sem] Course Notes & Handouts", false, false, allStages, "ALL", "ALL", null);
+        createOrUpdateRequiredFile("Lab Manual", "ACADEMIC", "[Stage: FPP, Post CAT 1, Post CAT 2, End Sem] Lab Manual", false, false, allStages, "ALL", "ALL", null);
     }
 
     private void createOrUpdateRequiredFile(String fileName, String fileCategory, String description, boolean mandatory, boolean isXFile, Set<AuditStage> stages, String year, String semester, FacultyRole targetRole) {
@@ -1166,8 +1271,32 @@ public class DirectorAuditController {
     // ── Required Files endpoints ────────────────────────────────────────────
 
     @GetMapping("/required-files")
-    public ResponseEntity<?> getRequiredFiles() {
-        return ResponseEntity.ok(requiredFileRepository.findAll());
+    public ResponseEntity<?> getRequiredFiles(@RequestParam(value = "stage", required = false) String stageStr) {
+        List<RequiredFile> all = requiredFileRepository.findAll();
+        if (stageStr == null || stageStr.trim().isEmpty() || "ALL".equalsIgnoreCase(stageStr)) {
+            return ResponseEntity.ok(all);
+        }
+        
+        AuditStage stageEnum = null;
+        try {
+            stageEnum = AuditStage.valueOf(stageStr.trim().toUpperCase());
+        } catch (Exception ignored) {}
+        
+        if (stageEnum == null) return ResponseEntity.ok(all);
+        
+        List<RequiredFile> matched = new ArrayList<>();
+        for (RequiredFile rf : all) {
+            if (rf.getStages() != null && rf.getStages().contains(stageEnum)) {
+                if (stageEnum == AuditStage.FPP) {
+                    String fn = rf.getFileName().toLowerCase();
+                    if (rf.isXFile() || fn.contains("(x)") || fn.contains("pec") || fn.contains("committee") || fn.contains("cat ") || fn.contains("assessment") || fn.contains("attainment") || fn.contains("fast learner") || fn.contains("cycle")) {
+                        continue;
+                    }
+                }
+                matched.add(rf);
+            }
+        }
+        return ResponseEntity.ok(matched);
     }
 
     @PostMapping("/required-files")
@@ -1221,6 +1350,38 @@ public class DirectorAuditController {
     public ResponseEntity<?> deleteRequiredFile(@PathVariable Long id) {
         requiredFileRepository.deleteById(id);
         return ResponseEntity.ok(Collections.singletonMap("message", "Deleted"));
+    }
+
+    @PostMapping("/department-status/{deptCode}/complete")
+    public ResponseEntity<?> completeDepartmentAudit(@PathVariable String deptCode) {
+        Department dept = departmentRepository.findByCode(deptCode)
+                .orElseThrow(() -> new RuntimeException("Department not found"));
+        AuditStatus status = auditStatusRepository.findByDepartmentCode(deptCode)
+                .orElseGet(() -> {
+                    AuditStatus s = new AuditStatus();
+                    s.setDepartment(dept);
+                    return s;
+                });
+        status.setStatus("AUDIT_COMPLETED");
+        status.setLastUpdated(LocalDateTime.now());
+        auditStatusRepository.save(status);
+        return ResponseEntity.ok(Map.of("message", "Audit for department " + deptCode + " marked as COMPLETED. Uploads locked for " + deptCode + "."));
+    }
+
+    @PostMapping("/department-status/{deptCode}/reopen")
+    public ResponseEntity<?> reopenDepartmentAudit(@PathVariable String deptCode) {
+        Department dept = departmentRepository.findByCode(deptCode)
+                .orElseThrow(() -> new RuntimeException("Department not found"));
+        AuditStatus status = auditStatusRepository.findByDepartmentCode(deptCode)
+                .orElseGet(() -> {
+                    AuditStatus s = new AuditStatus();
+                    s.setDepartment(dept);
+                    return s;
+                });
+        status.setStatus("IN_PROGRESS");
+        status.setLastUpdated(LocalDateTime.now());
+        auditStatusRepository.save(status);
+        return ResponseEntity.ok(Map.of("message", "Audit for department " + deptCode + " RE-OPENED. Uploads enabled for " + deptCode + "."));
     }
 
     @PutMapping("/required-files/{id}")
@@ -1734,6 +1895,344 @@ public class DirectorAuditController {
         }
     }
 
+    // ── Dynamic Academic Years ─────────────────────────────────────────────
+
+    @GetMapping("/academic-years")
+    public ResponseEntity<?> getAcademicYears() {
+        List<com.iqac.audit.entity.academic.AcademicYear> list = academicYearRepository.findAll();
+        if (list.isEmpty()) {
+            // seed defaults if empty
+            String[] defaults = {"2024–2025", "2025–2026", "2026–2027"};
+            for (String code : defaults) {
+                com.iqac.audit.entity.academic.AcademicYear ay = new com.iqac.audit.entity.academic.AcademicYear(code, code.contains("2026"));
+                academicYearRepository.save(ay);
+                list.add(ay);
+            }
+        }
+        return ResponseEntity.ok(list);
+    }
+
+    @PostMapping("/academic-years")
+    public ResponseEntity<?> createAcademicYear(@RequestBody Map<String, String> payload) {
+        try {
+            String yearCode = payload.get("yearCode");
+            if (yearCode == null || yearCode.trim().isEmpty()) {
+                return ResponseEntity.badRequest().body(Collections.singletonMap("message", "Academic year code required"));
+            }
+            cleanStr(yearCode);
+            Optional<com.iqac.audit.entity.academic.AcademicYear> opt = academicYearRepository.findByYearCode(yearCode.trim());
+            if (opt.isPresent()) {
+                return ResponseEntity.badRequest().body(Collections.singletonMap("message", "Academic year already exists"));
+            }
+            com.iqac.audit.entity.academic.AcademicYear ay = new com.iqac.audit.entity.academic.AcademicYear(yearCode.trim(), true);
+            academicYearRepository.save(ay);
+            auditLogService.log("CREATE_ACADEMIC_YEAR", yearCode.trim(), null, "Created active academic year " + yearCode.trim());
+            return ResponseEntity.ok(ay);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Collections.singletonMap("message", e.getMessage()));
+        }
+    }
+
+    // ── Dynamic Audits Management (Single & Batch Creation) ─────────────────────
+
+    @GetMapping("/audits")
+    public ResponseEntity<?> getAudits(
+            @RequestParam(value = "academicYear", required = false) String academicYear,
+            @RequestParam(value = "departmentCode", required = false) String departmentCode,
+            @RequestParam(value = "yearLevel", required = false) String yearLevel) {
+        List<com.iqac.audit.entity.audit.Audit> audits = auditRepository.findByArchivedFalse();
+        if (academicYear != null && !academicYear.trim().isEmpty() && !"ALL".equalsIgnoreCase(academicYear)) {
+            audits = audits.stream().filter(a -> academicYear.equalsIgnoreCase(a.getAcademicYear())).collect(Collectors.toList());
+        }
+        if (departmentCode != null && !departmentCode.trim().isEmpty() && !"ALL".equalsIgnoreCase(departmentCode)) {
+            audits = audits.stream().filter(a -> a.getDepartment() != null && departmentCode.equalsIgnoreCase(a.getDepartment().getCode())).collect(Collectors.toList());
+        }
+        if (yearLevel != null && !yearLevel.trim().isEmpty() && !"ALL".equalsIgnoreCase(yearLevel)) {
+            audits = audits.stream().filter(a -> yearLevel.equalsIgnoreCase(a.getYearLevel())).collect(Collectors.toList());
+        }
+        return ResponseEntity.ok(audits);
+    }
+
+    @PostMapping("/audits")
+    public ResponseEntity<?> createSingleAudit(@RequestBody Map<String, Object> payload) {
+        try {
+            List<com.iqac.audit.entity.audit.Audit> auditsToSave = buildAuditsForPayload(payload);
+            List<com.iqac.audit.entity.audit.Audit> savedAudits = new ArrayList<>();
+            
+            for (com.iqac.audit.entity.audit.Audit audit : auditsToSave) {
+                com.iqac.audit.entity.audit.Audit saved = auditRepository.save(audit);
+                savedAudits.add(saved);
+                auditLogService.log("CREATE_AUDIT", saved.getName(), null, "Single Audit created for " + saved.getDepartment().getCode());
+                
+                // Map Audit to AuditSchedule automatically
+                AuditSchedule schedule = new AuditSchedule();
+                schedule.setTitle(saved.getName());
+                schedule.setAuditDate(saved.getStartDate());
+                schedule.setDueDate(saved.getEndDate());
+                schedule.setDepartmentCode(saved.getDepartment().getCode());
+                schedule.setYear(saved.getYearLevel());
+                schedule.setAuditType(saved.getAuditType());
+                schedule.setDescription(saved.getDescription());
+                schedule.setStatus("PUBLISHED");
+                schedule.setCreatedAt(LocalDateTime.now());
+                auditScheduleRepository.save(schedule);
+
+                // Ensure required files are mapped for this academic year, dept and year level
+                ensureRequiredFilesMapped(saved.getAcademicYear(), saved.getDepartment().getCode(), saved.getYearLevel());
+
+                notifyAuditCreated(saved);
+            }
+            return ResponseEntity.ok(savedAudits.size() == 1 ? savedAudits.get(0) : savedAudits);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Collections.singletonMap("message", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/audits/batch")
+    public ResponseEntity<?> createBatchAudits(@RequestBody List<Map<String, Object>> payloads) {
+        try {
+            if (payloads == null || payloads.isEmpty()) {
+                return ResponseEntity.badRequest().body(Collections.singletonMap("message", "At least one audit payload is required"));
+            }
+            List<com.iqac.audit.entity.audit.Audit> createdAudits = new ArrayList<>();
+            for (Map<String, Object> payload : payloads) {
+                List<com.iqac.audit.entity.audit.Audit> auditsToSave = buildAuditsForPayload(payload);
+                for (com.iqac.audit.entity.audit.Audit audit : auditsToSave) {
+                    com.iqac.audit.entity.audit.Audit saved = auditRepository.save(audit);
+                    createdAudits.add(saved);
+
+                    // Map Audit to AuditSchedule automatically
+                    AuditSchedule schedule = new AuditSchedule();
+                    schedule.setTitle(saved.getName());
+                    schedule.setAuditDate(saved.getStartDate());
+                    schedule.setDueDate(saved.getEndDate());
+                    schedule.setDepartmentCode(saved.getDepartment().getCode());
+                    schedule.setYear(saved.getYearLevel());
+                    schedule.setAuditType(saved.getAuditType());
+                    schedule.setDescription(saved.getDescription());
+                    schedule.setStatus("PUBLISHED");
+                    schedule.setCreatedAt(LocalDateTime.now());
+                    auditScheduleRepository.save(schedule);
+
+                    // Ensure required files are mapped for this academic year, dept and year level
+                    ensureRequiredFilesMapped(saved.getAcademicYear(), saved.getDepartment().getCode(), saved.getYearLevel());
+
+                    auditLogService.log("CREATE_AUDIT_BATCH", saved.getName(), null, "Batch Audit created for " + saved.getDepartment().getCode());
+                    notifyAuditCreated(saved);
+                }
+            }
+            return ResponseEntity.ok(createdAudits);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Collections.singletonMap("message", e.getMessage()));
+        }
+    }
+
+    private List<com.iqac.audit.entity.audit.Audit> buildAuditsForPayload(Map<String, Object> payload) {
+        String departmentCode = (String) payload.get("departmentCode");
+        List<com.iqac.audit.entity.audit.Audit> result = new ArrayList<>();
+
+        if ("ALL".equalsIgnoreCase(departmentCode)) {
+            List<Department> allDepts = departmentRepository.findAll();
+            for (Department dept : allDepts) {
+                Map<String, Object> singlePayload = new HashMap<>(payload);
+                singlePayload.put("departmentCode", dept.getCode());
+                try {
+                    result.add(validateAndBuildAudit(singlePayload));
+                } catch (RuntimeException ignored) {
+                    // Skip department if overlap exists for that department
+                }
+            }
+            if (result.isEmpty()) {
+                throw new RuntimeException("No audits could be created for ALL departments. Check if audits already exist for the selected period.");
+            }
+        } else {
+            result.add(validateAndBuildAudit(payload));
+        }
+
+        return result;
+    }
+
+    private void ensureRequiredFilesMapped(String academicYear, String departmentCode, String yearLevel) {
+        String[] standardFiles = {
+            "Curriculum", "Syllabus", "CO, PO, PSO Mapping", "Lesson Planning", 
+            "Pedagogy / Reports", "Assignment Details", "Course PPT", 
+            "Question Bank", "Internal Assessment Test Papers", "Answer Keys", 
+            "Sample Answer Scripts", "Course End Survey", "Attainment Sheet"
+        };
+        for (String fName : standardFiles) {
+            Optional<RequiredFile> existing = requiredFileRepository.findByFileName(fName);
+            if (existing.isEmpty()) {
+                RequiredFile rf = new RequiredFile();
+                rf.setFileName(fName);
+                rf.setFileCategory("ACADEMIC");
+                rf.setAcademicYear(academicYear != null ? academicYear : "ALL");
+                rf.setYear(yearLevel != null ? yearLevel : "ALL");
+                rf.setDescription("Required audit file: " + fName);
+                rf.setMandatory(true);
+                rf.setCreatedAt(LocalDateTime.now());
+                requiredFileRepository.save(rf);
+            } else {
+                RequiredFile rf = existing.get();
+                if (rf.getAcademicYear() == null || rf.getAcademicYear().equals("ALL")) {
+                    rf.setAcademicYear(academicYear);
+                    requiredFileRepository.save(rf);
+                }
+            }
+        }
+    }
+
+    private com.iqac.audit.entity.audit.Audit validateAndBuildAudit(Map<String, Object> payload) {
+        String name = (String) payload.get("name");
+        String academicYear = (String) payload.get("academicYear");
+        String departmentCode = (String) payload.get("departmentCode");
+        String yearLevel = (String) payload.get("yearLevel");
+        String auditType = payload.getOrDefault("auditType", "ACADEMIC").toString();
+        String startDateStr = (String) payload.get("startDate");
+        String endDateStr = (String) payload.get("endDate");
+        String description = (String) payload.getOrDefault("description", "");
+        String notes = (String) payload.getOrDefault("additionalNotes", "");
+
+        if (name == null || name.trim().isEmpty()) throw new RuntimeException("Audit name is required");
+        if (academicYear == null || academicYear.trim().isEmpty()) throw new RuntimeException("Academic year is required");
+        if (departmentCode == null || departmentCode.trim().isEmpty()) throw new RuntimeException("Department is required");
+        if (yearLevel == null || yearLevel.trim().isEmpty()) throw new RuntimeException("Year level is required");
+        if (startDateStr == null || endDateStr == null || startDateStr.trim().isEmpty() || endDateStr.trim().isEmpty()) {
+            throw new RuntimeException("Audit start date and end date are required");
+        }
+
+        LocalDate startDate = parseDate(startDateStr);
+        LocalDate endDate = parseDate(endDateStr);
+
+        if (endDate.isBefore(startDate)) {
+            throw new RuntimeException("End date cannot be before start date");
+        }
+
+        Department dept = departmentRepository.findByCode(departmentCode)
+                .orElseThrow(() -> new RuntimeException("Department not found: " + departmentCode));
+
+        // Conflict check: Check overlapping audits for same department / year
+        List<com.iqac.audit.entity.audit.Audit> existing = auditRepository.findByAcademicYearAndDepartmentCodeAndYearLevelAndArchivedFalse(academicYear, departmentCode, yearLevel);
+        for (com.iqac.audit.entity.audit.Audit a : existing) {
+            if (!(endDate.isBefore(a.getStartDate()) || startDate.isAfter(a.getEndDate()))) {
+                throw new RuntimeException("An audit already exists for department " + departmentCode + " / " + yearLevel + " during the selected period (" + a.getStartDate() + " to " + a.getEndDate() + ")");
+            }
+        }
+
+        com.iqac.audit.entity.audit.Audit audit = new com.iqac.audit.entity.audit.Audit();
+        audit.setName(name);
+        audit.setAcademicYear(academicYear);
+        audit.setDepartment(dept);
+        audit.setYearLevel(yearLevel);
+        audit.setAuditType(auditType);
+        audit.setDescription(description);
+        audit.setStartDate(startDate);
+        audit.setEndDate(endDate);
+        audit.setStatus("DRAFT");
+        audit.setAdditionalNotes(notes);
+
+        if (payload.containsKey("invigilatorId") && payload.get("invigilatorId") != null) {
+            String invIdStr = payload.get("invigilatorId").toString().trim();
+            if (!invIdStr.isEmpty() && !"null".equalsIgnoreCase(invIdStr)) {
+                try {
+                    Long invId = Long.valueOf(invIdStr);
+                    iqacInvigilatorRepository.findById(invId).ifPresent(audit::setAssignedInvigilator);
+                } catch (NumberFormatException ignored) {}
+            }
+        }
+
+        return audit;
+    }
+
+    private void notifyAuditCreated(com.iqac.audit.entity.audit.Audit audit) {
+        Optional<Hod> hodOpt = hodRepository.findByDepartmentCode(audit.getDepartment().getCode());
+        hodOpt.ifPresent(hod -> {
+            notificationService.createNotification(hod.getUser(),
+                    "New Audit Created: '" + audit.getName() + "' for " + audit.getDepartment().getCode() + " (" + audit.getYearLevel() + ")",
+                    "AUDIT", "New Audit Scheduled");
+        });
+    }
+
+    @DeleteMapping("/audits/{id}")
+    public ResponseEntity<?> archiveAudit(@PathVariable Long id) {
+        try {
+            com.iqac.audit.entity.audit.Audit audit = auditRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Audit not found"));
+            
+            audit.setArchived(true);
+            auditRepository.save(audit);
+            auditLogService.log("ARCHIVE_AUDIT", audit.getName(), "ACTIVE", "ARCHIVED");
+            return ResponseEntity.ok(Collections.singletonMap("message", "Audit archived successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Collections.singletonMap("message", e.getMessage()));
+        }
+    }
+
+    // ── Audit Pre-Closure Verification & Controlled State Machine ─────────────────────
+
+    @PostMapping("/audits/{id}/verify-closure")
+    public ResponseEntity<?> verifyAuditClosure(@PathVariable Long id) {
+        try {
+            com.iqac.audit.entity.audit.Audit audit = auditRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Audit not found"));
+
+            List<String> pendingItems = new ArrayList<>();
+
+            // 1. Verify required files submitted
+            List<RequiredFile> reqFiles = requiredFileRepository.findAll();
+            List<Faculty> deptFaculty = facultyRepository.findByDepartmentCode(audit.getDepartment().getCode());
+            
+            for (RequiredFile rf : reqFiles) {
+                if (rf.isMandatory()) {
+                    boolean submitted = false;
+                    if ("ACADEMIC".equalsIgnoreCase(rf.getFileCategory())) {
+                        for (Faculty f : deptFaculty) {
+                            List<AcademicFile> files = academicFileRepository.findByFacultyId(f.getId());
+                            if (files.stream().anyMatch(af -> rf.getFileName().equalsIgnoreCase(af.getDocumentType()) && "APPROVED".equalsIgnoreCase(af.getStatus()))) {
+                                submitted = true;
+                                break;
+                            }
+                        }
+                    } else {
+                        List<DepartmentFile> dfiles = departmentFileRepository.findByDepartment(audit.getDepartment().getCode());
+                        if (dfiles.stream().anyMatch(df -> rf.getFileName().equalsIgnoreCase(df.getDocumentType()) && "APPROVED".equalsIgnoreCase(df.getStatus()))) {
+                            submitted = true;
+                        }
+                    }
+                    if (!submitted) {
+                        pendingItems.add("Mandatory Required File pending approval: " + rf.getFileName());
+                    }
+                }
+            }
+
+            if (!pendingItems.isEmpty()) {
+                Map<String, Object> err = new HashMap<>();
+                err.put("canComplete", false);
+                err.put("message", "Audit cannot be completed because required items are pending.");
+                err.put("pendingItems", pendingItems);
+                return ResponseEntity.badRequest().body(err);
+            }
+
+            audit.setStatus("COMPLETED");
+            auditRepository.save(audit);
+            auditLogService.log("COMPLETE_AUDIT", audit.getName(), "IN_PROGRESS", "COMPLETED");
+
+            return ResponseEntity.ok(Collections.singletonMap("message", "Audit successfully completed! All requirements verified."));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Collections.singletonMap("message", e.getMessage()));
+        }
+    }
+
+    // ── Audit Logs ─────────────────────────────────────────────────────────────
+
+    @GetMapping("/logs")
+    public ResponseEntity<?> getAuditLogs() {
+        return ResponseEntity.ok(auditLogRepository.findAllByOrderByTimestampDesc());
+    }
+
+    private String cleanStr(String str) {
+        return str == null ? "" : str.trim();
+    }
+
     private LocalDate parseDate(String dateStr) {
         String cleanStr = dateStr.trim();
         List<String> patterns = Arrays.asList(
@@ -1750,4 +2249,4 @@ public class DirectorAuditController {
         }
         throw new IllegalArgumentException("Unsupported date format: '" + dateStr + "'");
     }
-}
+}

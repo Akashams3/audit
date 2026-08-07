@@ -231,8 +231,8 @@ const DirectorRequiredFilesPage = () => {
     <div className="space-y-6 font-sans">
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-800">Required Files Control</h2>
-          <p className="text-xs text-slate-400 font-semibold mt-0.5">Select an Audit Stage from the dropdown to automatically populate required files, or mark Audit Complete to clear files before starting a new stage.</p>
+          <h2 className="text-xl font-bold text-slate-800">Required Files Master Definition</h2>
+          <p className="text-xs text-slate-400 font-semibold mt-0.5">Manage master required files, roles, and mandatory criteria. To activate audit stages and clear active views, use the Director Audit Stage Control tab.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <form onSubmit={handleCsvUpload} className="flex items-center space-x-2 bg-slate-50 border border-slate-200 p-1.5 rounded-xl">
@@ -267,165 +267,6 @@ const DirectorRequiredFilesPage = () => {
           </button>
         </div>
       </div>
-
-      {/* Filter Dropdowns for Stage, Year, and Semester */}
-      <div className="bg-slate-50 border border-slate-200 p-3 rounded-2xl flex flex-wrap items-center gap-3">
-        <span className="text-xs font-bold text-slate-600">Filters:</span>
-        <div>
-          <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Stage</label>
-          <select
-            value={selectedStageFilter}
-            onChange={(e) => setSelectedStageFilter(e.target.value)}
-            className="bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-bold text-slate-700 outline-none"
-          >
-            <option value="">All Stages</option>
-            <option value="FPP">FPP</option>
-            <option value="POST_CAT_1">Post CAT 1</option>
-            <option value="POST_CAT_2">Post CAT 2</option>
-            <option value="POST_CAT_3">Post CAT 3 / End Sem</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Year</label>
-          <select
-            value={selectedYearFilter}
-            onChange={(e) => setSelectedYearFilter(e.target.value)}
-            className="bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-bold text-slate-700 outline-none"
-          >
-            <option value="">All Years</option>
-            <option value="1st Year">1st Year</option>
-            <option value="2nd Year">2nd Year</option>
-            <option value="3rd Year">3rd Year</option>
-            <option value="4th Year">4th Year</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Semester</label>
-          <select
-            value={selectedSemesterFilter}
-            onChange={(e) => setSelectedSemesterFilter(e.target.value)}
-            className="bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-bold text-slate-700 outline-none"
-          >
-            <option value="">All Semesters</option>
-            <option value="Sem 1">Sem 1</option>
-            <option value="Sem 2">Sem 2</option>
-            <option value="Sem 3">Sem 3</option>
-            <option value="Sem 4">Sem 4</option>
-            <option value="Sem 5">Sem 5</option>
-            <option value="Sem 6">Sem 6</option>
-            <option value="Sem 7">Sem 7</option>
-            <option value="Sem 8">Sem 8</option>
-            <option value="ODD">ODD</option>
-            <option value="EVEN">EVEN</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Audit Stage Trigger Dropdown & Audit Complete Panel */}
-      <div className="bg-gradient-to-r from-blue-900 to-indigo-900 text-white border border-blue-800 rounded-2xl p-5 shadow-md flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <span className="text-[10px] font-extrabold uppercase tracking-widest text-blue-300 block">Audit Stage Control & Trigger</span>
-          <h3 className="text-sm font-bold text-white mt-0.5">Select Audit Stage to Auto-Populate Required Files</h3>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center space-x-2 bg-white/10 backdrop-blur-md p-1.5 rounded-xl border border-white/20">
-            <select
-              value={selectedStage}
-              onChange={(e) => setSelectedStage(e.target.value)}
-              className="bg-white text-slate-800 font-bold text-xs px-3 py-2 rounded-lg outline-none cursor-pointer"
-            >
-              <option value="FPP">1. Start FPP audit</option>
-              <option value="POST_CAT_1">2. Start Post CAT 1 audit</option>
-              <option value="POST_CAT_2">3. Start Post CAT 2 audit</option>
-              <option value="POST_CAT_3">4. Start Post CAT 3 / End sem audit</option>
-            </select>
-            <button
-              onClick={handleTriggerAuditStage}
-              disabled={triggeringStage}
-              className="bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-400 text-white font-extrabold px-4 py-2 rounded-lg text-xs transition-all shadow-md"
-            >
-              {triggeringStage ? 'Starting...' : 'Start Selected Audit'}
-            </button>
-          </div>
-
-          <button
-            onClick={() => setShowCompleteModal(true)}
-            disabled={clearingStage}
-            className="bg-rose-600 hover:bg-rose-700 disabled:bg-slate-400 text-white font-extrabold px-4 py-2.5 rounded-xl text-xs shadow-md transition-all flex items-center space-x-1.5 cursor-pointer"
-          >
-            <span>Audit Complete (Save DB & Clear List)</span>
-          </button>
-        </div>
-      </div>
-
-      {showCompleteModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xl max-w-md w-full space-y-4 animate-fade-in">
-            <h3 className="font-bold text-slate-800 text-base">Complete Audit & Save Schedule to DB</h3>
-            <p className="text-xs text-slate-500 font-semibold">
-              Select the Year and Semester to tag the audit schedule and academic calendar before storing them permanently in the database and clearing active frontend display.
-            </p>
-            <form onSubmit={handleAuditCompleteSubmit} className="space-y-4">
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Academic Year</label>
-                <select
-                  value={completeYear}
-                  onChange={(e) => setCompleteYear(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-blue-500"
-                >
-                  <option value="1st Year">1st Year</option>
-                  <option value="2nd Year">2nd Year</option>
-                  <option value="3rd Year">3rd Year</option>
-                  <option value="4th Year">4th Year</option>
-                  <option value="2024-25">2024-25</option>
-                  <option value="2025-26">2025-26</option>
-                  <option value="2026-27">2026-27</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Semester</label>
-                <select
-                  value={completeSem}
-                  onChange={(e) => setCompleteSem(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-blue-500"
-                >
-                  <option value="Sem 1">Sem 1</option>
-                  <option value="Sem 2">Sem 2</option>
-                  <option value="Sem 3">Sem 3</option>
-                  <option value="Sem 4">Sem 4</option>
-                  <option value="Sem 5">Sem 5</option>
-                  <option value="Sem 6">Sem 6</option>
-                  <option value="Sem 7">Sem 7</option>
-                  <option value="Sem 8">Sem 8</option>
-                  <option value="ODD">ODD</option>
-                  <option value="EVEN">EVEN</option>
-                </select>
-              </div>
-
-              <div className="flex items-center justify-end space-x-3 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setShowCompleteModal(false)}
-                  className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-700 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={clearingStage}
-                  className="px-5 py-2 text-xs font-extrabold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-md disabled:bg-slate-300"
-                >
-                  {clearingStage ? 'Saving to DB...' : 'Save to DB & Clear Active View'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {showForm && (
         <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
@@ -526,7 +367,6 @@ const DirectorRequiredFilesPage = () => {
                           ? <BookOpen size={13} className="text-blue-500 flex-shrink-0" />
                           : <FolderOpen size={13} className="text-orange-500 flex-shrink-0" />}
                         <span className="font-bold text-slate-800">{getDisplayFileName(f.fileName, academicCalendar)}</span>
-                        {f.isXFile && <span className="bg-rose-100 text-rose-800 text-[9px] font-bold px-1.5 py-0.5 rounded ml-1.5">(X)</span>}
                       </div>
                     </td>
                     <td className="py-3.5 px-2">

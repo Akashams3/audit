@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Bell, LogOut, CheckCheck } from 'lucide-react';
+import { useAcademicYear } from '../context/AcademicYearContext';
+import { Bell, LogOut, CheckCheck, Calendar } from 'lucide-react';
 
 const Navbar = () => {
   const { user, logout, authFetch } = useAuth();
+  const { academicYears, selectedAcademicYear, setSelectedAcademicYear } = useAcademicYear();
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
@@ -81,6 +83,22 @@ const Navbar = () => {
           <h1 className="text-md font-bold text-slate-800 tracking-tight">IQAC System</h1>
           <p className="text-[10px] text-slate-400 font-semibold tracking-wider uppercase hidden sm:block">Internal Quality Assurance Cell</p>
         </div>
+      </div>
+
+      <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm">
+        <Calendar size={15} className="text-brand-600" />
+        <span className="text-xs font-semibold text-slate-500 hidden md:inline">Acad. Year:</span>
+        <select
+          value={selectedAcademicYear}
+          onChange={(e) => setSelectedAcademicYear(e.target.value)}
+          className="bg-transparent font-bold text-slate-800 text-xs focus:outline-none cursor-pointer"
+        >
+          {academicYears.map((ay) => (
+            <option key={ay.yearCode} value={ay.yearCode}>
+              {ay.yearCode}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="flex items-center space-x-4">

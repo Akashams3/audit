@@ -31,11 +31,14 @@ public class FileDownloadController {
     @Autowired
     private FileStorageService fileStorageService;
 
+    @Autowired
+    private com.iqac.audit.service.audit.AuditLogService auditLogService;
+
     @GetMapping("/download/academic/{id}")
     public ResponseEntity<?> downloadAcademicFile(@PathVariable Long id) {
         Optional<AcademicFile> fileOpt = academicFileRepository.findById(id);
         if (fileOpt.isEmpty()) {
-            return ResponseEntity.notFound().build();
+            return ResponseEntity.status(404).body(java.util.Collections.singletonMap("message", "File is unavailable."));
         }
 
         try {
@@ -43,16 +46,17 @@ public class FileDownloadController {
             Path path = fileStorageService.loadFile(cf.getFilePath());
             Resource resource = new UrlResource(path.toUri());
 
-            if (resource.exists() || resource.isReadable()) {
+            if (resource.exists() && resource.isReadable()) {
+                auditLogService.log("DOWNLOAD_FILE", cf.getFileName(), null, "Academic file downloaded");
                 return ResponseEntity.ok()
                         .contentType(MediaType.APPLICATION_OCTET_STREAM)
                         .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + cf.getFileName() + "\"")
                         .body(resource);
             } else {
-                return ResponseEntity.notFound().build();
+                return ResponseEntity.status(404).body(java.util.Collections.singletonMap("message", "File is unavailable."));
             }
         } catch (Exception e) {
-            return ResponseEntity.internalServerError().body(e.getMessage());
+            return ResponseEntity.status(404).body(java.util.Collections.singletonMap("message", "File is unavailable."));
         }
     }
 
@@ -60,7 +64,7 @@ public class FileDownloadController {
     public ResponseEntity<?> downloadDepartmentFile(@PathVariable Long id) {
         Optional<DepartmentFile> fileOpt = departmentFileRepository.findById(id);
         if (fileOpt.isEmpty()) {
-            return ResponseEntity.notFound().build();
+            return ResponseEntity.status(404).body(java.util.Collections.singletonMap("message", "File is unavailable."));
         }
 
         try {
@@ -68,16 +72,17 @@ public class FileDownloadController {
             Path path = fileStorageService.loadFile(df.getFilePath());
             Resource resource = new UrlResource(path.toUri());
 
-            if (resource.exists() || resource.isReadable()) {
+            if (resource.exists() && resource.isReadable()) {
+                auditLogService.log("DOWNLOAD_FILE", df.getFileName(), null, "Department file downloaded");
                 return ResponseEntity.ok()
                         .contentType(MediaType.APPLICATION_OCTET_STREAM)
                         .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + df.getFileName() + "\"")
                         .body(resource);
             } else {
-                return ResponseEntity.notFound().build();
+                return ResponseEntity.status(404).body(java.util.Collections.singletonMap("message", "File is unavailable."));
             }
         } catch (Exception e) {
-            return ResponseEntity.internalServerError().body(e.getMessage());
+            return ResponseEntity.status(404).body(java.util.Collections.singletonMap("message", "File is unavailable."));
         }
     }
 
@@ -85,7 +90,7 @@ public class FileDownloadController {
     public ResponseEntity<?> viewAcademicFile(@PathVariable Long id) {
         Optional<AcademicFile> fileOpt = academicFileRepository.findById(id);
         if (fileOpt.isEmpty()) {
-            return ResponseEntity.notFound().build();
+            return ResponseEntity.status(404).body(java.util.Collections.singletonMap("message", "File is unavailable."));
         }
 
         try {
@@ -93,7 +98,7 @@ public class FileDownloadController {
             Path path = fileStorageService.loadFile(cf.getFilePath());
             Resource resource = new UrlResource(path.toUri());
 
-            if (resource.exists() || resource.isReadable()) {
+            if (resource.exists() && resource.isReadable()) {
                 MediaType mediaType = MediaType.APPLICATION_OCTET_STREAM;
                 if ("PDF".equalsIgnoreCase(cf.getFileType())) {
                     mediaType = MediaType.APPLICATION_PDF;
@@ -103,10 +108,10 @@ public class FileDownloadController {
                         .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + cf.getFileName() + "\"")
                         .body(resource);
             } else {
-                return ResponseEntity.notFound().build();
+                return ResponseEntity.status(404).body(java.util.Collections.singletonMap("message", "File is unavailable."));
             }
         } catch (Exception e) {
-            return ResponseEntity.internalServerError().body(e.getMessage());
+            return ResponseEntity.status(404).body(java.util.Collections.singletonMap("message", "File is unavailable."));
         }
     }
 
@@ -114,7 +119,7 @@ public class FileDownloadController {
     public ResponseEntity<?> viewDepartmentFile(@PathVariable Long id) {
         Optional<DepartmentFile> fileOpt = departmentFileRepository.findById(id);
         if (fileOpt.isEmpty()) {
-            return ResponseEntity.notFound().build();
+            return ResponseEntity.status(404).body(java.util.Collections.singletonMap("message", "File is unavailable."));
         }
 
         try {
@@ -122,7 +127,7 @@ public class FileDownloadController {
             Path path = fileStorageService.loadFile(df.getFilePath());
             Resource resource = new UrlResource(path.toUri());
 
-            if (resource.exists() || resource.isReadable()) {
+            if (resource.exists() && resource.isReadable()) {
                 MediaType mediaType = MediaType.APPLICATION_OCTET_STREAM;
                 if ("PDF".equalsIgnoreCase(df.getFileType())) {
                     mediaType = MediaType.APPLICATION_PDF;
@@ -132,10 +137,10 @@ public class FileDownloadController {
                         .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + df.getFileName() + "\"")
                         .body(resource);
             } else {
-                return ResponseEntity.notFound().build();
+                return ResponseEntity.status(404).body(java.util.Collections.singletonMap("message", "File is unavailable."));
             }
         } catch (Exception e) {
-            return ResponseEntity.internalServerError().body(e.getMessage());
+            return ResponseEntity.status(404).body(java.util.Collections.singletonMap("message", "File is unavailable."));
         }
     }
 }

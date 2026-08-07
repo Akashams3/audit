@@ -22,6 +22,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @CrossOrigin(origins = "*", maxAge = 3600)
 @RestController
@@ -209,6 +210,75 @@ public class HodUserController {
             }
 
             return ResponseEntity.ok(facultyRepository.save(faculty));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Collections.singletonMap("message", e.getMessage()));
+        }
+    }
+
+    @Autowired
+    private com.iqac.audit.repository.user.FacultyAssignmentRepository facultyAssignmentRepository;
+
+    @Autowired
+    private com.iqac.audit.repository.user.IqacInvigilatorRepository iqacInvigilatorRepository;
+
+    @GetMapping("/assignments")
+    public ResponseEntity<?> getAssignments(
+            @RequestParam(value = "academicYear", required = false) String academicYear,
+            @RequestParam(value = "yearLevel", required = false) String yearLevel) {
+        try {
+            Hod hod = getAuthenticatedHod();
+            List<com.iqac.audit.entity.user.FacultyAssignment> list = facultyAssignmentRepository.findByDepartmentCode(hod.getDepartment().getCode());
+            if (academicYear != null && !academicYear.trim().isEmpty() && !"ALL".equalsIgnoreCase(academicYear)) {
+                list = list.stream().filter(a -> academicYear.equalsIgnoreCase(a.getAcademicYear())).collect(Collectors.toList());
+            }
+            if (yearLevel != null && !yearLevel.trim().isEmpty() && !"ALL".equalsIgnoreCase(yearLevel)) {
+                list = list.stream().filter(a -> yearLevel.equalsIgnoreCase(a.getYearLevel())).collect(Collectors.toList());
+            }
+            return ResponseEntity.ok(list);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Collections.singletonMap("message", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/assignments")
+    public ResponseEntity<?> createAssignment(@RequestBody Map<String, Object> payload) {
+        try {
+            Hod hod = getAuthenticatedHod();
+            String academicYear = (String) payload.get("academicYear");
+            String yearLevel = (String) payload.get("yearLevel");
+            Long facultyId = Long.valueOf(payload.get("facultyId").toString());
+            String subject = (String) payload.get("subject");
+            String role = (String) payload.getOrDefault("role", "Faculty");
+            String mentorName = (String) payload.getOrDefault("mentorName", "");
+
+            if (academicYear == null || academicYear.trim().isEmpty()) throw new RuntimeException("Academic year is required");
+            if (yearLevel == null || yearLevel.trim().isEmpty()) throw new RuntimeException("Year level is required");
+            if (subject == null || subject.trim().isEmpty()) throw new RuntimeException("Subject is required");
+
+            Faculty faculty = facultyRepository.findById(facultyId)
+                    .orElseThrow(() -> new RuntimeException("Faculty not found"));
+
+            if (!faculty.getDepartment().getCode().equals(hod.getDepartment().getCode())) {
+                return ResponseEntity.status(403).body(Collections.singletonMap("message", "Faculty belongs to a different department"));
+            }
+
+            com.iqac.audit.entity.user.FacultyAssignment assignment = new com.iqac.audit.entity.user.FacultyAssignment();
+            assignment.setAcademicYear(academicYear);
+            assignment.setDepartment(hod.getDepartment());
+            assignment.setYearLevel(yearLevel);
+            assignment.setFaculty(faculty);
+            assignment.setSubject(subject);
+            assignment.setRole(role);
+            assignment.setMentorName(mentorName);
+
+            if (payload.containsKey("invigilatorId") && payload.get("invigilatorId") != null) {
+                Long invId = Long.valueOf(payload.get("invigilatorId").toString());
+                iqacInvigilatorRepository.findById(invId).ifPresent(assignment::setInvigilator);
+            }
+
+            com.iqac.audit.entity.user.FacultyAssignment saved = facultyAssignmentRepository.save(assignment);
+
+            return ResponseEntity.ok(saved);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Collections.singletonMap("message", e.getMessage()));
         }
