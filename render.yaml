@@ -3,11 +3,14 @@ services:
     name: audit-backend
     runtime: docker
     rootDir: backend
+    plan: free
     envVars:
       - key: SPRING_DATASOURCE_URL
-        fromDatabase:
-          name: audit-db
-          property: connectionString
+        sync: false
+      - key: SPRING_DATASOURCE_USERNAME
+        sync: false
+      - key: SPRING_DATASOURCE_PASSWORD
+        sync: false
       - key: SPRING_DATASOURCE_DRIVER_CLASS_NAME
         value: org.postgresql.Driver
       - key: SPRING_JPA_DATABASE_PLATFORM
@@ -16,8 +19,3 @@ services:
         value: update
       - key: IQAC_APP_JWTSECRET
         generateValue: true
-
-databases:
-  - name: audit-db
-    databaseName: iqac_audit_db
-    user: iqac_user
