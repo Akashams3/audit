@@ -1,0 +1,106 @@
+/* 🔹 LAYOUT */
+.hod-layout {
+  display: flex;
+  height: 100vh;
+  background: #f1f5f9;
+}
+
+/* 🔹 SIDEBAR */
+.sidebar {
+  width: 260px;
+  background: #0f172a;
+  color: white;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.logo {
+  text-align: center;
+  margin-bottom: 20px;
+  font-size: 22px;
+  font-weight: bold;
+}
+
+/* 🔹 MENU ITEMS */
+.menu-item {
+  padding: 10px;
+  margin: 5px 0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+/* LEVEL INDENTATION */
+.level-0 {
+  font-weight: bold;
+}
+
+.level-1 {
+  padding-left: 20px;
+  font-size: 14px;
+}
+
+.level-2 {
+  padding-left: 40px;
+  font-size: 13px;
+  color: #cbd5f5;
+}
+
+/* HOVER */
+.menu-item:hover {
+  background: #1e293b;
+}
+
+/* ACTIVE */
+.active {
+  background: #2563eb;
+}
+
+.active-sub {
+  background: #1d4ed8;
+}
+
+/* SUBMENU */
+.submenu {
+  margin-left: 5px;
+}
+
+/* 🔹 MAIN CONTENT */
+.main-content {
+  flex: 1;
+  padding: 30px;
+  overflow-y: auto;
+}
+
+/* TITLE */
+.title {
+  font-size: 28px;
+  font-weight: bold;
+  margin-bottom: 20px;
+}
+
+/* CARDS */
+.cards {
+  display: flex;
+  gap: 20px;
+}
+
+.card {
+  flex: 1;
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  transition: 0.3s;
+}
+
+.card:hover {
+  transform: translateY(-5px);
+}
+
+/* CONTENT BOX */
+.content-box {
+  background: white;
+  padding: 20px;
+  border-radius: 10px;
+}

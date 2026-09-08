@@ -1,0 +1,32 @@
+# Local and User TODOs
+TODO.md
+
+# Environment variables and local credentials
+.env
+.env.local
+*.env
+
+
+# Uploads directory (Dynamic audit files)
+backend/uploads/
+uploads/
+
+# Test scripts and temporary data
+test_e2e.py
+test_schedule_e2e.py
+*.log
+.gemini/
+
+# Build and Dependency directories
+backend/target/
+frontend/dist/
+node_modules/
+
+# IDE/Editor configurations
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
